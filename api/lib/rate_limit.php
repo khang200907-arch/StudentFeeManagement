@@ -62,6 +62,11 @@ function check_rate_limit(string $action = 'default', ?int $maxAttempts = null, 
     fclose($handle);
 
     if ($isLimited) {
+        // Số giây đến khi request cũ nhất trong cửa sổ hết hạn → client biết khi nào được thử lại
+        $retryAfter = max(1, $windowSeconds - ($now - min($recent)));
+        if (!headers_sent()) {
+            header('Retry-After: ' . $retryAfter);
+        }
         json_error('Quá nhiều yêu cầu gửi lên từ địa chỉ này. Vui lòng thử lại sau giây lát.', 'RATE_LIMITED', 429);
     }
 }

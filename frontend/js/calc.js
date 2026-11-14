@@ -219,12 +219,14 @@
    */
   function formatDateVN(dateStr) {
     if (!dateStr) return '';
-    const parts = dateStr.split(' ')[0].split('-');
-    if (parts.length === 3) {
-      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    // Chỉ nhận dạng YYYY-MM-DD (có thể kèm giờ). Kết quả chỉ gồm chữ số và '/',
+    // nên chèn thẳng vào innerHTML vẫn an toàn.
+    const iso = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) {
+      return `${iso[3]}/${iso[2]}/${iso[1]}`;
     }
     const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
+    if (isNaN(d.getTime())) return ''; // không trả lại chuỗi gốc (có thể chứa HTML)
     const day = String(d.getDate()).padStart(2, '0');
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const year = d.getFullYear();

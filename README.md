@@ -95,7 +95,7 @@ tuition-system/
 │   └── config.example.php           # Tệp cấu hình mẫu
 │
 ├── tests/                           # Bộ kiểm thử
-│   ├── run.php                      # Kiểm thử tích hợp backend (341 test)
+│   ├── run.php                      # Kiểm thử tích hợp backend (346 test)
 │   ├── tests.js                     # Kiểm thử đơn vị frontend (?test=1, 30 test)
 │   ├── perf.php                     # Kiểm thử hiệu năng: mọi thao tác < 200 ms
 │   ├── seed_large.php               # Nạp dữ liệu lớn vào tuition_test để thử quy mô
@@ -106,6 +106,7 @@ tuition-system/
 │   ├── PHAN_TICH_THIET_KE.md        # Pha phân tích (yêu cầu, use case, quy tắc) & thiết kế (kiến trúc, CSDL, API)
 │   ├── DAC_TA_YEU_CAU.md            # NFR có chỉ tiêu đo được, BR-001…, giả định/ràng buộc, nghiệm thu, truy vết FR → TC
 │   ├── ERD.md                       # Sơ đồ thực thể – liên kết + từ điển dữ liệu 15 bảng
+│   ├── BAO_MAT_VA_PHI_CHUC_NANG.md  # Bảo mật, transaction, idempotency, hiệu năng, tin cậy + tồn đọng
 │   └── BAO_CAO_KIEM_THU.md          # Báo cáo kiểm thử chức năng, hiệu năng, bảo mật
 │
 ├── assets/screenshots/              # Ảnh chụp màn hình
@@ -216,7 +217,7 @@ Các tài khoản sau phục vụ kiểm thử và đánh giá chức năng trê
 
 ## Chạy kiểm thử tự động
 
-> Kết quả chạy gần nhất (14/11/2026, sau đợt sửa lỗi; PHP 8.5.12, MariaDB 10.11.16): backend **341/341 PASS**, frontend **30/30 PASS**, quét bảo mật **63 PASS / 0 FAIL / 2 WARN** (2 WARN là việc cấu hình khi triển khai), hiệu năng **mọi thao tác < 200 ms** với 1 người dùng (chậm nhất: đăng nhập ~107 ms). Chi tiết xem [docs/BAO_CAO_KIEM_THU.md](docs/BAO_CAO_KIEM_THU.md).
+> Kết quả chạy gần nhất (14/11/2026, sau đợt sửa lỗi; PHP 8.5.12, MariaDB 10.11.16): backend **346/346 PASS**, frontend **30/30 PASS**, quét bảo mật **63 PASS / 0 FAIL / 2 WARN** (2 WARN là việc cấu hình khi triển khai), hiệu năng **mọi thao tác < 200 ms** với 1 người dùng (chậm nhất: đăng nhập ~107 ms). Chi tiết xem [docs/BAO_CAO_KIEM_THU.md](docs/BAO_CAO_KIEM_THU.md).
 
 Tất cả các lệnh dưới đây chạy tại thư mục gốc dự án và yêu cầu **Apache + MySQL đang chạy** (bộ test gọi API thật qua `http://localhost/tuition-system/api`).
 
@@ -235,7 +236,7 @@ Tất cả các lệnh dưới đây chạy tại thư mục gốc dự án và 
 C:\xampp\php\php.exe tests\run.php
 ```
 
-Bộ kiểm thử sử dụng cơ sở dữ liệu riêng `tuition_test` (tài khoản `root` không mật khẩu của XAMPP), tự động reset bảng và nạp dữ liệu mẫu trước khi kiểm tra (xác minh số lượng chuẩn: 24 sinh viên, 22 hồ sơ học phí, 10 miễn giảm, 26 giao dịch sổ cái, 5 yêu cầu hoàn tiền, 7 hóa đơn). Gồm **341 bài kiểm thử** tích hợp thuộc 32 nhóm quy tắc nghiệp vụ và bảo mật:
+Bộ kiểm thử sử dụng cơ sở dữ liệu riêng `tuition_test` (tài khoản `root` không mật khẩu của XAMPP), tự động reset bảng và nạp dữ liệu mẫu trước khi kiểm tra (xác minh số lượng chuẩn: 24 sinh viên, 22 hồ sơ học phí, 10 miễn giảm, 26 giao dịch sổ cái, 5 yêu cầu hoàn tiền, 7 hóa đơn). Gồm **346 bài kiểm thử** tích hợp thuộc 34 nhóm (0–33) quy tắc nghiệp vụ và bảo mật:
 
 Các nội dung được kiểm tra gồm:
 
@@ -432,6 +433,8 @@ Quét black-box qua HTTP, bổ sung cho các test bảo mật trong `run.php`: c
 
 ## Vấn đề bảo mật cần xử lý trước khi triển khai
 
+Toàn bộ biện pháp bảo mật, transaction, idempotency, hiệu năng và danh sách tồn đọng: [docs/BAO_MAT_VA_PHI_CHUC_NANG.md](docs/BAO_MAT_VA_PHI_CHUC_NANG.md).
+
 Các lỗi phát hiện trong đợt kiểm thử 14/11/2026 **đã được sửa trong mã nguồn** (chi tiết: [docs/BAO_CAO_KIEM_THU.md](docs/BAO_CAO_KIEM_THU.md), mục 6). Còn lại 3 việc **phải làm khi triển khai thật**, vì phụ thuộc môi trường chứ không phải code:
 
 | Việc cần làm | Ở đâu |
@@ -453,4 +456,4 @@ Các yêu cầu chức năng trong đặc tả đã được triển khai và c�
 - Kiểm soát đồng thời bằng `FOR UPDATE`.
 - Idempotency bằng UUID `request_id`.
 - Chuẩn hóa tìm kiếm tiếng Việt không dấu.
-- Kiểm thử tự động: backend **341/341 PASS**, frontend **30/30 PASS** (chạy lại ngày 14/11/2026).
+- Kiểm thử tự động: backend **346/346 PASS**, frontend **30/30 PASS** (chạy lại ngày 14/11/2026).

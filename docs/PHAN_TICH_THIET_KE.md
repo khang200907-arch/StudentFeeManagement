@@ -133,7 +133,7 @@ flowchart LR
 | NFR-06 | Chính xác | Tiền là số nguyên VND, không dùng số thực; làm tròn miễn giảm % đến đồng | `run.php` nhóm 1, 3 |
 | NFR-07 | Khả dụng | Giao diện tiếng Việt; lỗi hiển thị ngay dưới ô nhập; responsive đến 360 px | checklist thủ công trong README |
 | NFR-08 | Triển khai | Chạy được trên XAMPP, không cần npm, framework hay CDN | — |
-| NFR-09 | Bảo trì | Có kiểm thử tự động tái lập được (database riêng, dữ liệu mẫu cố định) | `run.php`: 341 test |
+| NFR-09 | Bảo trì | Có kiểm thử tự động tái lập được (database riêng, dữ liệu mẫu cố định) | `run.php`: 346 test |
 
 ## 5. Quy tắc nghiệp vụ
 
@@ -571,7 +571,7 @@ flowchart TB
 | Cấp | Công cụ | Phạm vi | Kết quả (14/11/2026) |
 | --- | --- | --- | --- |
 | Đơn vị (client) | `tests/tests.js` (`?test=1`) | Công thức `calc.js` | 30/30 |
-| Tích hợp API | `tests/run.php` | 32 nhóm: nghiệp vụ, biên, đồng thời, bảo mật, dữ liệu mẫu | 341/341 |
+| Tích hợp API | `tests/run.php` | 34 nhóm: nghiệp vụ, biên, đồng thời, bảo mật, dữ liệu mẫu, rate limit | 346/346 |
 | Hiệu năng | `tests/perf.php` | 37 thao tác đọc/ghi, ngưỡng 200 ms; tải đồng thời (tham khảo) | Đạt, chậm nhất 107 ms |
 | Bảo mật | `tests/security_scan.php` | 64 kiểm tra black-box | 63 PASS, 0 FAIL |
 | Thủ công | Checklist trong README | Giao diện, in ấn, đóng tab, responsive | — |

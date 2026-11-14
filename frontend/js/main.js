@@ -4643,7 +4643,7 @@
             <td class="text-right">${Calc.formatVND(e.running_balance)}</td>
             <td class="text-center" style="white-space: nowrap;">
               ${isPayment && e.receipt_no ? `
-                <button type="button" class="btn btn-sm btn-outline-primary btn-print-receipt" data-receipt-no="${e.receipt_no}" title="Xem &amp; In biên lai">
+                <button type="button" class="btn btn-sm btn-outline-primary btn-print-receipt" data-receipt-no="${escapeHTML(e.receipt_no)}" title="Xem &amp; In biên lai">
                   🖨️ Biên lai
                 </button>
               ` : ''}

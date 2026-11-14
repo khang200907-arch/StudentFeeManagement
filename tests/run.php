@@ -4529,6 +4529,80 @@ it("Nạp lại schema.sql, seed.sql, và seed_users.php hai lần liên tiếp 
 );
 
 // ----------------------------------------------------------------------------
+// 33. RATE LIMIT ĐĂNG NHẬP (30 lần / 60 giây / IP)
+// Mỗi lần thử chạy trong 1 tiến trình PHP riêng, như 1 request thật từ IP giả,
+// KHÔNG ở chế độ test (không nới giới hạn), dùng database tuition_test.
+// ----------------------------------------------------------------------------
+suite_header("33. Kiểm thử Giới hạn tần suất đăng nhập (Rate Limit)");
+
+$rlScript = sys_get_temp_dir() . '/tuition_rl_attempt_' . uniqid() . '.php';
+file_put_contents($rlScript, '<?php
+putenv("TUITION_DB=tuition_test");
+$_SERVER["REMOTE_ADDR"] = $argv[1];
+if (($argv[2] ?? "") === "with-test-header") { $_SERVER["HTTP_X_TUITION_TEST_DB"] = "tuition_test"; }
+require ' . var_export(dirname(__DIR__) . '/api/lib/auth.php', true) . ';
+ob_start();
+register_shutdown_function(function () {
+    $j = json_decode((string)ob_get_clean(), true);
+    $retry = null;
+    foreach (headers_list() as $h) { if (stripos($h, "Retry-After:") === 0) { $retry = (int)trim(substr($h, 12)); } }
+    echo json_encode(["status" => http_response_code(), "code" => $j["error"]["code"] ?? "OK", "retry" => $retry]);
+});
+login_user("khong_ton_tai_ratelimit", "Sai@12345");
+');
+
+$rlPhp = PHP_BINARY;
+$rlAttempt = function (string $ip, string $mode = '') use ($rlPhp, $rlScript): array {
+    $out = shell_exec(escapeshellarg($rlPhp) . ' ' . escapeshellarg($rlScript) . ' ' . escapeshellarg($ip) . ($mode ? ' ' . $mode : ''));
+    return json_decode((string)$out, true) ?: ['status' => 0, 'code' => 'NO_OUTPUT', 'retry' => null];
+};
+$rlCounterFile = fn(string $ip, string $scope = '') => sys_get_temp_dir() . '/tuition_rate_limits/' . md5('login_' . $ip . $scope) . '.json';
+
+// IP ngẫu nhiên trong dải dành cho tài liệu (RFC 5737) → không trùng lần chạy trước
+$ipA = '198.51.100.' . random_int(1, 120);
+$ipB = '198.51.100.' . random_int(121, 240);
+$ipC = '203.0.113.' . random_int(1, 254);
+foreach ([$ipA, $ipB, $ipC] as $ip) { @unlink($rlCounterFile($ip)); }
+
+$first30 = [];
+for ($k = 0; $k < 30; $k++) { $first30[] = $rlAttempt($ipA)['status']; }
+it("30 lần đăng nhập đầu tiên từ cùng 1 IP trong 60 giây đều được xử lý bình thường (HTTP 401, không bị chặn)",
+    count(array_filter($first30, fn($s) => $s === 401)) === 30, 30, array_count_values($first30));
+
+$blocked = $rlAttempt($ipA);
+// (Header Retry-After không kiểm được ở đây vì PHP CLI không lưu header; đã kiểm qua HTTP thủ công.)
+it("Lần thứ 31 bị chặn với HTTP 429 và mã lỗi RATE_LIMITED",
+    $blocked['status'] === 429 && $blocked['code'] === 'RATE_LIMITED',
+    ['status' => 429, 'code' => 'RATE_LIMITED'], $blocked);
+
+$spoof = $rlAttempt($ipA, 'with-test-header');
+it("Header X-Tuition-Test-Db gửi từ IP không phải localhost KHÔNG nới được giới hạn (vẫn HTTP 429)",
+    $spoof['status'] === 429, 429, $spoof['status']);
+
+$other = $rlAttempt($ipB);
+it("IP khác không bị ảnh hưởng khi một IP đang bị chặn (HTTP 401, không phải 429)",
+    $other['status'] === 401, 401, $other['status']);
+
+// 40 request song song từ cùng 1 IP → khóa file (flock) phải cho qua đúng 30
+$procs = [];
+for ($k = 0; $k < 40; $k++) {
+    $procs[] = proc_open([$rlPhp, $rlScript, $ipC], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pp);
+    $procPipes[] = $pp;
+}
+$parallel = [];
+foreach ($procs as $idx => $proc) {
+    $parallel[] = (json_decode((string)stream_get_contents($procPipes[$idx][1]), true)['status'] ?? 0);
+    fclose($procPipes[$idx][1]); fclose($procPipes[$idx][2]);
+    proc_close($proc);
+}
+$parallelCounts = array_count_values($parallel);
+it("40 request đăng nhập song song từ cùng 1 IP: đúng 30 được xử lý và 10 bị chặn 429 (bộ đếm không bị ghi đè khi đồng thời)",
+    ($parallelCounts[401] ?? 0) === 30 && ($parallelCounts[429] ?? 0) === 10, ['401' => 30, '429' => 10], $parallelCounts);
+
+foreach ([$ipA, $ipB, $ipC] as $ip) { @unlink($rlCounterFile($ip)); }
+@unlink($rlScript);
+
+// ----------------------------------------------------------------------------
 // TỔNG KẾT BỘ KIỂM THỬ
 // ----------------------------------------------------------------------------
 echo "\n" . COLOR_BOLD . "====================================================================\n";

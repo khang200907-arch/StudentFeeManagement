@@ -153,11 +153,11 @@ Phương pháp: máy chủ và client chạy trên cùng một máy. Mỗi endpo
 
 ## 5. Vấn đề khác phát hiện trong quá trình kiểm thử
 
-| ID | Mức | Vấn đề | Đề xuất |
-| --- | --- | --- | --- |
-| D-01 | **Cao** | `database/database.sql` (tệp "hợp nhất" mà README cũ hướng dẫn dùng) **lỗi thời**: thiếu bảng `bills`, `bill_counters`, `payment_sessions`, chỉ có 12 sinh viên thay vì 24. Ai cài đặt theo tệp này sẽ gặp lỗi ở các chức năng thanh toán QR/thẻ và hóa đơn. | Tạo lại `database.sql` từ `schema.sql` + `create_app_user.sql` + `seed.sql`, hoặc xóa tệp. README đã được sửa để hướng dẫn dùng 3 tệp riêng. |
-| D-02 | Trung bình | README có lỗi hướng dẫn: lệnh `C:\xampp\php\php.exe php database/seed_users.php` (thừa chữ `php`); "3 bước" nhưng có 4 bước; số liệu seed mâu thuẫn (13 hay 24 sinh viên); cây thư mục thiếu `src/`, `qrcode.js`, `payment.php`; lệnh `mysql` giả định có trong PATH. | **Đã sửa** trong README. |
-| D-03 | Thấp | Mã nguồn trùng lặp: `src/` giống `frontend/`, `src/js/app.js` giống `main.js`, `src/tests/tests.js` giống `tests/tests.js`, `assets/screenshots/` giống `frontend/assets/images/`. | Xóa bản thừa để tránh sửa nhầm chỗ. |
+| ID | Mức | Vấn đề | Đề xuất | Trạng thái |
+| --- | --- | --- | --- | --- |
+| D-01 | **Cao** | `database/database.sql` (tệp "hợp nhất" mà README cũ hướng dẫn dùng) **lỗi thời**: thiếu bảng `bills`, `bill_counters`, `payment_sessions`, chỉ có 12 sinh viên thay vì 24. Ai cài đặt theo tệp này sẽ gặp lỗi ở các chức năng thanh toán QR/thẻ và hóa đơn. | Tạo lại `database.sql` từ `schema.sql` + `create_app_user.sql` + `seed.sql`, hoặc xóa tệp. README đã được sửa để hướng dẫn dùng 3 tệp riêng. | ✅ **Đã sửa:** sinh lại từ 3 tệp gốc (15 bảng, 24 sinh viên, đã import thử), thêm `database/build_database_sql.ps1` để sinh lại khi sửa schema/seed. |
+| D-02 | Trung bình | README có lỗi hướng dẫn: lệnh `C:\xampp\php\php.exe php database/seed_users.php` (thừa chữ `php`); "3 bước" nhưng có 4 bước; số liệu seed mâu thuẫn (13 hay 24 sinh viên); cây thư mục thiếu `src/`, `qrcode.js`, `payment.php`; lệnh `mysql` giả định có trong PATH. | Sửa README. | ✅ **Đã sửa** trong README. |
+| D-03 | Thấp | Mã nguồn trùng lặp: `src/` giống `frontend/`, `src/js/app.js` giống `main.js`, `src/tests/tests.js` giống `tests/tests.js`, `assets/screenshots/` giống `frontend/assets/images/`. | Xóa bản thừa để tránh sửa nhầm chỗ. | ✅ **Đã sửa:** xóa `src/`, `backend/` (cổng đăng nhập cũ không dùng) và `frontend/assets/images/`; giữ `assets/screenshots/`. |
 
 ## 6. Cập nhật sau đợt sửa lỗi (14/11/2026)
 
@@ -173,7 +173,7 @@ Phương pháp: máy chủ và client chạy trên cùng một máy. Mỗi endpo
 | S-07 | `Header unset X-Powered-By`. | `.htaccess` |
 | S-08 | Xóa `src/` (bản sao giống hệt `frontend/`) và `backend/` (cổng đăng nhập thứ 2 không ai dùng); chặn mọi tệp ẩn (`.gitignore`, `.git/`...). | `.htaccess` |
 | D-01 | Sinh lại `database.sql` từ 3 tệp gốc (15 bảng, 24 sinh viên, đã import thử thành công) + script `database/build_database_sql.ps1`. | `database/` |
-| D-03 | Xóa ảnh trùng `frontend/assets/images/` (không trang nào dùng). | |
+| D-03 | Xóa `src/` (bản sao `frontend/`), `backend/` (cổng đăng nhập thứ 2 không dùng) và ảnh trùng `frontend/assets/images/`. | `src/`, `backend/`, `frontend/assets/images/` |
 
 ### 6.2 Code bất hợp lý khác đã sửa
 
@@ -196,7 +196,7 @@ Phương pháp: máy chủ và client chạy trên cùng một máy. Mỗi endpo
 
 | Hạng mục | Trước | Sau |
 | --- | --- | --- |
-| Backend `tests/run.php` | 341/341 | **341/341** |
+| Backend `tests/run.php` | 341/341 | **346/346** (thêm nhóm 33: rate limit) |
 | Frontend `?test=1` | 30/30 | **30/30** |
 | Quét bảo mật | 53 PASS / 1 FAIL / 10 WARN | **63 PASS / 0 FAIL / 2 WARN** (thêm 3 kiểm tra mới) |
 | Hiệu năng (25 client) | 900 req/s, 0 lỗi | **926 req/s, 0 lỗi** |

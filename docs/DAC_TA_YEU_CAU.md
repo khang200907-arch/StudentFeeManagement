@@ -38,7 +38,7 @@ Cột **Đo được** ghi kết quả thật của lần chạy 14/11/2026.
 | NFR-SEC-06 | Chống CSRF | 100% request ghi thiếu hoặc sai token → **403** | Đạt | TC-13-03, TC-13-04, TC-20-10, TC-22-42, TC-31-08, SEC [4] |
 | NFR-SEC-07 | Chống SQL injection | 0 payload làm lộ dữ liệu, gây lỗi 500 hoặc trễ > 2,5 s | 0/6 payload (`' OR 1=1`, `UNION SELECT`, `SLEEP(3)`…) | SEC [5] |
 | NFR-SEC-08 | Chống gán trường trái phép | Trường ngoài danh sách cho phép → **400** | Đạt | SEC [5], TC-22-38, TC-31-07 |
-| NFR-SEC-09 | Chống dò mật khẩu | Khóa **15 phút** sau **5** lần sai; ≤ **30** lần đăng nhập/phút/IP → **429** | Khóa: đạt. Rate limit: **chưa có test tự động** | TC-13-05…07, TC-22-43, TC-24-05, TC-24-06 |
+| NFR-SEC-09 | Chống dò mật khẩu | Khóa **15 phút** sau **5** lần sai; ≤ **30** lần đăng nhập/phút/IP → **429** + `Retry-After` | Khóa: đạt. Rate limit: lần 31 → 429 (`Retry-After: 57`); 40 request song song → đúng 30 qua | TC-13-05…07, TC-22-43, TC-24-05, TC-24-06, TC-33-01…05 |
 | NFR-SEC-10 | Không dò được tài khoản | Cùng thông báo lỗi; chênh lệch thời gian đăng nhập (tài khoản có / không tồn tại) **< 80 ms** | Chênh **1 ms** | TC-24-03, TC-24-04, SEC [7] |
 | NFR-SEC-11 | Lưu mật khẩu an toàn | bcrypt cost **≥ 10** (thực tế 11); mật khẩu tạm 12 ký tự từ nguồn ngẫu nhiên mật mã | cost 11 | TC-22-01, `api/lib/config.php` |
 | NFR-SEC-12 | Phiên hết hạn | Rảnh **1.800 s** → 401 `SESSION_EXPIRED`; tối đa **28.800 s** → 401 `SESSION_MAX_LIFETIME` | Đạt | TC-31-02, TC-31-03 |
@@ -95,7 +95,7 @@ Giới hạn quy mô: với ~5.000 sinh viên / 10.000 hồ sơ, `GET /api/fee-r
 | NFR-REL-05 | Chứng từ không trùng, không nhảy số | Số `PT-`/`HD-` liên tục theo ngày, 0 trùng | TC-08-01…03, TC-32-03 |
 | NFR-REL-06 | Cổng thanh toán lỗi không làm sai số liệu | Lỗi/timeout cổng → HTTP 502/422, **0** ghi sổ cái | TC-22-25, TC-28-19, TC-28-20, TC-30-03 |
 | NFR-REL-07 | Cài đặt lặp lại được | Nạp lại `schema.sql` + `seed.sql` + `seed_users.php` **2 lần liên tiếp** không lỗi, dữ liệu toàn vẹn | TC-32-06, TC-00-01, TC-00-02 |
-| NFR-REL-08 | Kiểm thử hồi quy | 100% test tự động PASS trước mỗi lần bàn giao | 341/341 TC, 30/30 FE |
+| NFR-REL-08 | Kiểm thử hồi quy | 100% test tự động PASS trước mỗi lần bàn giao | 346/346 TC, 30/30 FE |
 
 ---
 
@@ -232,7 +232,7 @@ derived_status (SQL, dùng cho bộ lọc và báo cáo – Nộp thừa đượ
 
 | Mã | Tiêu chí | Cách đo | Trạng thái 14/11/2026 |
 | --- | --- | --- | :---: |
-| AC-01 | 100% test tích hợp backend PASS | `tests/run.php` | 341/341 ✔ |
+| AC-01 | 100% test tích hợp backend PASS | `tests/run.php` | 346/346 ✔ |
 | AC-02 | 100% test đơn vị frontend PASS | `?test=1` | 30/30 ✔ |
 | AC-03 | Mọi thao tác < 200 ms với 1 người dùng | `tests/perf.php` (exit 0) | ✔ (max 107 ms) |
 | AC-04 | Quét bảo mật 0 FAIL | `tests/security_scan.php` (exit 0) | ✔ (63/0/2) |
@@ -270,7 +270,7 @@ Viết dạng *Cho … / Khi … / Thì …*. Mỗi tiêu chí được nghiệm
 | FR | Mô tả ngắn | Test tích hợp backend (`tests/run.php`) | Test frontend | AC |
 | --- | --- | --- | --- | --- |
 | FR-01 | Đăng nhập, thông báo lỗi chung | TC-00-03, TC-18-27, TC-18-28, TC-18-29, TC-22-04, TC-24-01, TC-24-02, TC-24-03, TC-24-04, TC-24-07, TC-26-01, TC-26-04, TC-28-01, TC-31-01 | — | AC-10 |
-| FR-02 | Khóa tài khoản 15 phút / 5 lần sai | TC-13-05, TC-13-06, TC-13-07, TC-22-43, TC-24-05, TC-24-06 | — | AC-10 |
+| FR-02 | Khóa tài khoản 15 phút / 5 lần sai; giới hạn 30 lần/phút/IP | TC-13-05, TC-13-06, TC-13-07, TC-22-43, TC-24-05, TC-24-06, TC-33-01…TC-33-05 | — | AC-10 |
 | FR-03 | Đăng xuất, hết phiên, đóng tab | TC-31-02, TC-31-03, TC-31-04, TC-31-05, TC-31-06, TC-31-07, TC-31-08, TC-31-09 | Thủ công: bảng SV #18–20 | AC-11 |
 | FR-04 | Cấp tài khoản sinh viên | TC-22-01, TC-22-02, TC-23-01 | — | AC-12 |
 | FR-05 | Đặt lại mật khẩu sinh viên | TC-22-03 | — | AC-12 |
@@ -311,5 +311,4 @@ Viết dạng *Cho … / Khi … / Thì …*. Mỗi tiêu chí được nghiệm
 | Hạng mục | Hiện trạng | Đề xuất |
 | --- | --- | --- |
 | FR-21 sửa số tín chỉ của quản trị viên (`PUT /api/fee-records/{id}`) | Không có test tự động | Thêm test: sửa tín chỉ → gross tính lại; tín chỉ 0/61 → 400 |
-| NFR-SEC-09 giới hạn 30 lần đăng nhập/phút | Không có test tự động (bộ test chạy ở chế độ nới giới hạn) | Thêm test không gửi header test, đăng nhập 31 lần → 429 |
 | Giao diện (đóng tab, in A4, 360 px, mất mạng) | Chỉ có checklist thủ công | Bổ sung test trình duyệt tự động (Playwright) nếu có điều kiện |
