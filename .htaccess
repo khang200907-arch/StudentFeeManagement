@@ -1,0 +1,53 @@
+# ============================================================================
+# Root .htaccess - Tuition Management System
+# Quy tắc rewrite + bảo mật cho Apache (XAMPP). Yêu cầu bật mod_rewrite và mod_headers.
+# ============================================================================
+
+# Tắt duyệt thư mục
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # 1. Chặn tệp/thư mục ẩn (.gitignore, .git/, .env...)
+    RewriteRule (^|/)\. - [F,L]
+
+    # 2. Chặn truy cập trực tiếp mã nguồn backend, cấu hình, SQL, log
+    RewriteRule ^(api/(lib|handlers)|config|database|logs)/ - [F,L]
+    RewriteRule \.(sql|log|ini|env|md)$ - [F,L]
+    RewriteRule ^tests/.+\.php$ - [F,L]
+
+    # 3. Mọi request /api/... → api/index.php (front controller)
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^api/(.*)$ api/index.php [QSA,L]
+
+    # 4. Ứng dụng chỉ có 1 cửa vào là index.php ở gốc. Mở thẳng /frontend/ → chuyển về gốc.
+    RewriteCond %{REQUEST_URI} ^(.*)/frontend/(index\.html)?$
+    RewriteRule ^ %1/ [R=302,L]
+
+    # 5. Trang gốc
+    RewriteRule ^$ index.php [L]
+</IfModule>
+
+DirectoryIndex index.php
+AddDefaultCharset UTF-8
+
+<IfModule mod_headers.c>
+    # Không tiết lộ phiên bản PHP
+    Header always unset X-Powered-By
+    Header unset X-Powered-By
+
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "DENY"
+    Header always set Referrer-Policy "no-referrer"
+    # script-src 'self': chỉ chạy JS từ file của chính site (không inline) → chống XSS.
+    # style-src còn 'unsafe-inline' vì giao diện dùng thuộc tính style="..." trong HTML sinh động.
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; frame-ancestors 'none';"
+
+    # Không cache HTML/JS/CSS để luôn nhận bản mới khi phát triển
+    <FilesMatch "\.(js|css|html|php)$">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+        Header set Pragma "no-cache"
+        Header set Expires "0"
+    </FilesMatch>
+</IfModule>

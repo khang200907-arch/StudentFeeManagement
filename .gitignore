@@ -1,0 +1,27 @@
+# Cấu hình chứa mật khẩu DB – mỗi máy tự tạo từ config/config.example.php.
+# (Nếu thiếu config.php, backend tự dùng config.example.php.)
+config/config.php
+
+# Environment variables
+.env
+.env.*
+
+# XAMPP temporary files / logs
+*.log
+logs/
+tmp/
+
+# IDE
+.vscode/
+.idea/
+
+# Operating system
+.DS_Store
+Thumbs.db
+
+# Dependencies
+vendor/
+node_modules/
+
+# Temporary files
+*.tmp

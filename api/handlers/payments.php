@@ -1,0 +1,229 @@
+<?php
+/**
+ * [ADMIN] THU TIỀN và ĐẢO BÚT TOÁN.
+ *
+ *   POST /api/fee-records/{id}/payments  Ghi phiếu thu → execute_payment_transaction() (api/lib/payment.php)
+ *   POST /api/ledger/{id}/reversal       Đảo (hủy) 1 phiếu thu: tạo bút toán âm đối ứng, không xóa dòng cũ
+ *
+ * Sổ cái (ledger_entries) chỉ THÊM, không sửa/xóa → luôn truy vết được lịch sử.
+ */
+
+declare(strict_types=1);
+
+require_once dirname(__DIR__) . '/lib/db.php';
+require_once dirname(__DIR__) . '/lib/auth.php';
+require_once dirname(__DIR__) . '/lib/csrf.php';
+require_once dirname(__DIR__) . '/lib/validate.php';
+require_once dirname(__DIR__) . '/lib/response.php';
+require_once dirname(__DIR__) . '/lib/audit.php';
+require_once dirname(__DIR__) . '/lib/calc.php';
+
+function handle_payments_routes(string $method, string $path, array $matches): void {
+    require_admin();
+
+    // 1. POST /api/fee-records/{id}/payments
+    if (preg_match('#^/api/fee-records/(\d+)/payments$#', $path, $m) && $method === 'POST') {
+        verify_csrf_token();
+        $feeRecordId = (int)$m[1];
+        $input = get_json_input();
+        validate_allowed_fields($input, ['amount', 'method', 'entry_date', 'note', 'request_id']);
+
+        $requestId = trim((string)($input['request_id'] ?? ''));
+        if ($requestId === '' || !preg_match('/^[a-f0-9\-]{36}$/i', $requestId)) {
+            json_error('Mã yêu cầu (request_id) không hợp lệ (yêu cầu chuẩn UUID).', 'INVALID_REQUEST_ID', 400, [
+                'request_id' => 'Yêu cầu mã định danh UUID hợp lệ.'
+            ]);
+        }
+
+        // Idempotency check: nếu request_id đã tồn tại, trả lại bản ghi cũ
+        $db = get_db_connection();
+        $chkReq = $db->prepare("SELECT * FROM ledger_entries WHERE request_id = :reqId");
+        $chkReq->execute(['reqId' => $requestId]);
+        $existingEntry = $chkReq->fetch();
+        if ($existingEntry) {
+            json_success($existingEntry, 200);
+        }
+
+        $amount = parse_currency($input['amount'] ?? null);
+        $payMethod = trim((string)($input['method'] ?? ''));
+        $note = isset($input['note']) ? trim((string)$input['note']) : null;
+        if ($note === '') $note = null;
+
+        $today = date('Y-m-d');
+        $hasCustomDate = isset($input['entry_date']) && trim((string)$input['entry_date']) !== '';
+        $entryDate = $hasCustomDate ? trim((string)$input['entry_date']) : $today;
+
+        $errors = [];
+        if ($amount === null || $amount <= 0) {
+            $errors['amount'] = 'Số tiền phải là số nguyên dương.';
+        }
+        if (!in_array($payMethod, ['Tiền mặt', 'Chuyển khoản', 'Thẻ'], true)) {
+            $errors['method'] = "Phương thức thanh toán phải là 'Tiền mặt', 'Chuyển khoản' hoặc 'Thẻ'.";
+        }
+        if ($hasCustomDate) {
+            $parsedDate = parse_and_validate_date((string)$input['entry_date']);
+            if ($parsedDate === false) {
+                $errors['entry_date'] = 'Ngày thanh toán không hợp lệ.';
+            } elseif ($parsedDate > $today) {
+                $errors['entry_date'] = 'Ngày thanh toán không được lớn hơn hôm nay.';
+            } else {
+                $entryDate = $parsedDate;
+            }
+        }
+        if ($note !== null && !validate_string_length($note, 0, 255)) {
+            $errors['note'] = 'Ghi chú tối đa 255 ký tự.';
+        }
+
+        if (!empty($errors)) {
+            json_error('Dữ liệu thanh toán không hợp lệ.', 'VALIDATION_ERROR', 400, $errors);
+        }
+
+        $userId = current_user_id();
+
+        // Transaction xử lý thanh toán với lock dòng và deadlock retry (hàm dùng chung execute_payment_transaction)
+        $result = db_transaction(function(PDO $pdo) use ($feeRecordId, $amount, $payMethod, $entryDate, $note, $requestId, $userId) {
+            return execute_payment_transaction(
+                $pdo,
+                $feeRecordId,
+                $amount,
+                $payMethod,
+                $entryDate,
+                $note,
+                $requestId,
+                $userId,
+                null,
+                null,
+                'payment'
+            );
+        }, $db);
+
+        json_success($result, 201);
+    }
+
+    // 2. POST /api/ledger/{entryId}/reversal
+    if (preg_match('#^/api/ledger/(\d+)/reversal$#', $path, $m) && $method === 'POST') {
+        verify_csrf_token();
+        $targetEntryId = (int)$m[1];
+        $input = get_json_input();
+        validate_allowed_fields($input, ['reason', 'request_id']);
+
+        $requestId = trim((string)($input['request_id'] ?? ''));
+        if ($requestId === '' || !preg_match('/^[a-f0-9\-]{36}$/i', $requestId)) {
+            json_error('Mã yêu cầu (request_id) không hợp lệ (yêu cầu chuẩn UUID).', 'INVALID_REQUEST_ID', 400);
+        }
+
+        $db = get_db_connection();
+        // Idempotency check: nếu request_id đã tồn tại, trả lại bản ghi cũ
+        $chkReq = $db->prepare("SELECT * FROM ledger_entries WHERE request_id = :reqId");
+        $chkReq->execute(['reqId' => $requestId]);
+        $existingEntry = $chkReq->fetch();
+        if ($existingEntry) {
+            json_success($existingEntry, 200);
+        }
+
+        $reason = trim((string)($input['reason'] ?? ''));
+        if ($reason === '') {
+            json_error('Lý do không được để trống.', 'VALIDATION_ERROR', 400, [
+                'reason' => 'Lý do không được để trống.'
+            ]);
+        } elseif (mb_strlen($reason, 'UTF-8') > 200) {
+            json_error('Lý do không được vượt quá 200 ký tự.', 'VALIDATION_ERROR', 400, [
+                'reason' => 'Lý do không được vượt quá 200 ký tự.'
+            ]);
+        }
+
+        $userId = current_user_id();
+
+        $result = db_transaction(function(PDO $pdo) use ($targetEntryId, $reason, $requestId, $userId) {
+            // Khóa bản ghi gốc cần đảo mục
+            $sel = $pdo->prepare("SELECT * FROM ledger_entries WHERE id = :id FOR UPDATE");
+            $sel->execute(['id' => $targetEntryId]);
+            $target = $sel->fetch();
+
+            if (!$target) {
+                json_error('Không tìm thấy giao dịch sổ cái cần đảo mục.', 'NOT_FOUND', 404);
+            }
+
+            if ($target['entry_type'] === 'transfer_out' || $target['entry_type'] === 'transfer_in') {
+                json_error('Không thể đảo bút toán chuyển khoản nội bộ.', 'CANNOT_REVERSE_TRANSFER', 422);
+            }
+
+            if ($target['entry_type'] !== 'payment') {
+                json_error('Chỉ giao dịch thanh toán (payment) mới có thể thực hiện đảo mục.', 'INVALID_ENTRY_TYPE', 422);
+            }
+
+            // Kiểm tra xem giao dịch này đã bị đảo mục trước đó chưa
+            $chkRev = $pdo->prepare("SELECT id FROM ledger_entries WHERE reverses_entry_id = :targetId FOR UPDATE");
+            $chkRev->execute(['targetId' => $targetEntryId]);
+            if ($chkRev->fetch()) {
+                json_error('Giao dịch thanh toán này đã được đảo mục trước đó. Không thể đảo mục lần 2.', 'ALREADY_REVERSED', 409);
+            }
+
+            // Lock fee_record
+            $feeRecordId = (int)$target['fee_record_id'];
+            $pdo->prepare("SELECT id FROM fee_records WHERE id = :id FOR UPDATE")->execute(['id' => $feeRecordId]);
+
+            // Kiểm tra nếu đảo mục làm total_paid bị âm (do tiền đã bị hoàn hoặc chuyển đi)
+            $sum = fetch_fee_record_summary($pdo, $feeRecordId);
+            $currentTotalPaid = (int)($sum['total_paid'] ?? 0);
+            $reversalAmount = (int)$target['amount'];
+
+            if (($currentTotalPaid - $reversalAmount) < 0) {
+                json_error('Không thể đảo bút toán vì số tiền đã được hoàn hoặc chuyển đi.', 'REVERSAL_REJECTED_CONSUMED', 422);
+            }
+
+            // Ghi bản ghi đảo mục (Reversals receive no receipt number)
+            $today = date('Y-m-d');
+            $note = 'Đảo mục phiếu thu ' . ($target['receipt_no'] ?? '#' . $targetEntryId);
+
+            $insStmt = $pdo->prepare(
+                "INSERT INTO ledger_entries (
+                    fee_record_id, entry_type, amount, method, entry_date,
+                    receipt_no, reverses_entry_id, reason, note, request_id, created_by, created_at
+                ) VALUES (
+                    :frId, 'reversal', :amount, :method, :entryDate,
+                    NULL, :targetId, :reason, :note, :reqId, :userId, NOW()
+                )"
+            );
+
+            try {
+                $insStmt->execute([
+                    'frId'      => $feeRecordId,
+                    'amount'    => $target['amount'],
+                    'method'    => $target['method'],
+                    'entryDate' => $today,
+                    'targetId'  => $targetEntryId,
+                    'reason'    => $reason,
+                    'note'      => $note,
+                    'reqId'     => $requestId,
+                    'userId'    => $userId
+                ]);
+            } catch (PDOException $pe) {
+                if ($pe->getCode() === '23000') {
+                    $chk = $pdo->prepare("SELECT * FROM ledger_entries WHERE request_id = :reqId");
+                    $chk->execute(['reqId' => $requestId]);
+                    $existing = $chk->fetch();
+                    if ($existing) {
+                        return $existing;
+                    }
+                }
+                throw $pe;
+            }
+
+            $newId = (int)$pdo->lastInsertId();
+
+            log_audit($userId, 'reversal', 'ledger_entries', (string)$newId, [
+                'target_entry_id' => $targetEntryId,
+                'amount'          => $target['amount'],
+                'reason'          => $reason,
+                'request_id'      => $requestId
+            ], $pdo);
+
+            $resStmt = $pdo->prepare("SELECT * FROM ledger_entries WHERE id = :id");
+            $resStmt->execute(['id' => $newId]);
+            return $resStmt->fetch();
+        }, $db);
+
+        json_success($result, 201);
+    }
+}

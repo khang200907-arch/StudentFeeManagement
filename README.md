@@ -1,1 +1,456 @@
-# StudentFeeManagement
+# Hệ thống Quản lý Học phí Sinh viên
+
+Ứng dụng quản lý học phí sinh viên được xây dựng trên **PHP 8.1+**, **MySQL/MariaDB** và giao diện **HTML, CSS, JavaScript thuần**. Dự án hướng đến mô hình triển khai cục bộ bằng XAMPP, không yêu cầu npm, framework frontend, CDN bên ngoài hoặc bước build.
+
+Các thao tác xác thực, phân quyền, truy cập dữ liệu và xử lý nghiệp vụ tài chính được thực hiện ở phía máy chủ. Frontend giao tiếp với backend thông qua API.
+
+## Mục lục
+
+- [Tổng quan](#tổng-quan)
+- [Công nghệ sử dụng](#công-nghệ-sử-dụng)
+- [Cấu trúc dự án](#cấu-trúc-dự-án)
+- [Yêu cầu hệ thống](#yêu-cầu-hệ-thống)
+- [Cài đặt và chạy ứng dụng](#cài-đặt-và-chạy-ứng-dụng-setup-guide)
+- [Tài khoản dùng thử](#tài-khoản-dùng-thử)
+- [Chạy kiểm thử tự động](#chạy-kiểm-thử-tự-động)
+- [Checklist kiểm thử thủ công](#checklist-kiểm-thử-thủ-công)
+- [Quy trình thiết lập tài khoản sinh viên](#quy-trình-thiết-lập-tài-khoản-sinh-viên--4-chức-năng-cổng-sinh-viên)
+- [Bảng kiểm thử thủ công phân hệ sinh viên](#bảng-kiểm-thử-thủ-công-phân-hệ-sinh-viên-hand-test-table)
+- [Giới hạn đã biết](#giới-hạn-đã-biết)
+- [Vấn đề bảo mật cần xử lý trước khi triển khai](#vấn-đề-bảo-mật-cần-xử-lý-trước-khi-triển-khai)
+- [Trạng thái yêu cầu](#trạng-thái-yêu-cầu)
+
+## Tổng quan
+
+Hệ thống hỗ trợ quản lý hồ sơ học phí và các nghiệp vụ tài chính liên quan, bao gồm:
+
+- Quản lý người dùng, đăng nhập và phiên làm việc.
+- Quản lý sinh viên, học kỳ, mức thu và hồ sơ học phí.
+- Ghi nhận thanh toán, theo dõi công nợ và lịch sử giao dịch.
+- Xử lý miễn giảm, hoàn tiền và đảo mục giao dịch.
+- Lập và in biên lai.
+- Theo dõi nhật ký kiểm toán và đối soát số liệu tài chính.
+- **Phân hệ Cổng Sinh viên (Student Portal):** Cho phép sinh viên đăng nhập vào tài khoản cá nhân và chỉ sử dụng đúng 4 chức năng nghiệp vụ (Đăng ký tín chỉ, Tra cứu công nợ học phí, Thanh toán học phí trực tuyến qua cổng mô phỏng, và Lịch sử thanh toán). Hệ thống cách ly dữ liệu tuyệt đối giữa các sinh viên và giữa sinh viên với các chức năng quản trị.
+
+Các tính năng và nghiệp vụ nêu trên được mô tả theo cấu trúc dự án và bộ kiểm thử đi kèm.
+
+## Công nghệ sử dụng
+
+| Thành phần | Công nghệ |
+| --- | --- |
+| Backend | PHP 8.1+ |
+| Cơ sở dữ liệu | MySQL / MariaDB |
+| Kết nối cơ sở dữ liệu | PDO |
+| Frontend | HTML5, CSS3, JavaScript ES6+ thuần |
+| Môi trường chạy cục bộ | XAMPP (Apache và MySQL/MariaDB) |
+| Kiểm thử backend | PHP CLI |
+| Kiểm thử frontend | JavaScript (`?test=1`) |
+
+Frontend không sử dụng npm, framework hoặc CDN bên ngoài.
+
+## Cấu trúc dự án
+
+> Mới tham gia dự án? Đọc [docs/HUONG_DAN_DOC_CODE.md](docs/HUONG_DAN_DOC_CODE.md): luồng request, thứ tự nên đọc code, sơ đồ database và các quy tắc bảo mật cần giữ.
+
+```text
+tuition-system/
+│
+├── index.php                        # Điểm khởi chạy ứng dụng (nạp frontend/index.html)
+│
+├── frontend/                        # Giao diện HTML/CSS/JavaScript (bản đang chạy)
+│   ├── index.html                   # Giao diện SPA quản lý học phí + Cổng sinh viên
+│   ├── css/
+│   │   └── style.css                # Giao diện responsive và CSS in biên lai/hóa đơn
+│   ├── js/
+│   │   ├── main.js                  # Sự kiện giao diện, modal, tabs và in ấn
+│   │   ├── api.js                   # API client, CSRF Token và Idempotency UUID
+│   │   ├── calc.js                  # Tính toán phía client và chuyển số thành chữ
+│   │   └── qrcode.js                # Thư viện tạo mã QR thuần JS (không CDN)
+│   └── assets/
+│       ├── images/                  # Ảnh giao diện
+│       └── icons/                   # Biểu tượng SVG
+│
+├── api/                             # API modules và handlers
+│   ├── index.php                    # Router: bảng định tuyến /api/... → handler
+│   ├── handlers/                    # auth, students, student (cổng SV), semesters, rates, fees,
+│   │                                # payments, refunds, history, reports, receipts, nav
+│   │                                # (đầu mỗi file có mục lục endpoint)
+│   └── lib/                         # config (cấu hình + cửa test + hash mật khẩu), db, auth, csrf,
+│                                    # validate, calc, audit, rate_limit, payment, payment_gateway
+│
+├── pages/                           # Các trang thông tin
+│   ├── about.php                    # Giới thiệu hệ thống
+│   └── contact.php                  # Liên hệ và gửi phản hồi
+│
+├── database/                        # SQL và dữ liệu khởi tạo
+│   ├── schema.sql                   # Cấu trúc bảng (15 bảng), khóa ngoại và view — BẢN MỚI NHẤT
+│   ├── seed.sql                     # Dữ liệu mẫu — BẢN MỚI NHẤT
+│   ├── create_app_user.sql          # Tạo tài khoản DB quyền tối thiểu
+│   ├── seed_users.php               # Khởi tạo mật khẩu Bcrypt qua CLI
+│   ├── database.sql                 # = 3 tệp trên gộp lại (tự sinh, không sửa tay)
+│   └── build_database_sql.ps1       # Sinh lại database.sql sau khi sửa schema/seed
+│
+├── config/                          # Cấu hình ứng dụng (bị chặn truy cập qua web)
+│   ├── config.php                   # Cấu hình môi trường
+│   └── config.example.php           # Tệp cấu hình mẫu
+│
+├── tests/                           # Bộ kiểm thử
+│   ├── run.php                      # Kiểm thử tích hợp backend (341 test)
+│   ├── tests.js                     # Kiểm thử đơn vị frontend (?test=1, 30 test)
+│   ├── perf.php                     # Kiểm thử hiệu năng: mọi thao tác < 200 ms
+│   ├── seed_large.php               # Nạp dữ liệu lớn vào tuition_test để thử quy mô
+│   └── security_scan.php            # Quét bảo mật black-box qua HTTP
+│
+├── docs/
+│   ├── HUONG_DAN_DOC_CODE.md        # Hướng dẫn đọc luồng dự án cho người mới — ĐỌC ĐẦU TIÊN
+│   ├── PHAN_TICH_THIET_KE.md        # Pha phân tích (yêu cầu, use case, quy tắc) & thiết kế (kiến trúc, CSDL, API)
+│   ├── DAC_TA_YEU_CAU.md            # NFR có chỉ tiêu đo được, BR-001…, giả định/ràng buộc, nghiệm thu, truy vết FR → TC
+│   ├── ERD.md                       # Sơ đồ thực thể – liên kết + từ điển dữ liệu 15 bảng
+│   └── BAO_CAO_KIEM_THU.md          # Báo cáo kiểm thử chức năng, hiệu năng, bảo mật
+│
+├── assets/screenshots/              # Ảnh chụp màn hình
+├── logs/                            # Log lỗi ứng dụng (tự tạo, bị chặn truy cập qua web)
+├── .htaccess                        # Quy tắc rewrite và bảo mật Apache
+├── .gitignore                       # Danh sách tệp loại trừ khỏi Git
+├── LICENSE                          # Giấy phép MIT
+└── README.md                        # Tài liệu dự án
+```
+
+## Yêu cầu hệ thống
+
+- PHP **8.1** trở lên.
+- MySQL hoặc MariaDB.
+- Apache và PHP được cấu hình trong XAMPP.
+- PHP CLI có thể truy cập từ Terminal/Command Prompt/PowerShell để chạy script khởi tạo và kiểm thử.
+- Trình duyệt web hiện đại.
+
+## Cài đặt và Chạy Ứng dụng (Setup Guide)
+
+Cài đặt trên XAMPP gồm **4 bước**.
+
+### Bước 1: Đưa dự án vào thư mục web
+Chép toàn bộ thư mục dự án vào thư mục `htdocs` của XAMPP:
+
+```text
+C:\xampp\htdocs\tuition-system
+```
+
+*(Hoặc tạo liên kết Junction trỏ từ `C:\xampp\htdocs\tuition-system` tới thư mục mã nguồn).*
+
+### Bước 2: Khởi động XAMPP
+Mở **XAMPP Control Panel**, nhấn nút **Start** cho cả 2 dịch vụ:
+- ✅ **Apache**
+- ✅ **MySQL** (MariaDB)
+
+### Bước 3: Nạp cơ sở dữ liệu
+
+> [!IMPORTANT]
+> Nạp **`schema.sql` + `create_app_user.sql` + `seed.sql`** theo thứ tự, hoặc chỉ nạp **`database.sql`** (tệp gộp sẵn 3 tệp đó, sinh bằng `database\build_database_sql.ps1`).
+>
+> Nếu bạn **cập nhật mã nguồn mới** (ví dụ tải bản mới từ GitHub) mà CSDL đang ở bản cũ, hãy nạp lại theo các bước dưới đây. Việc nạp lại sẽ **xóa toàn bộ dữ liệu hiện có** trong `tuition_system`, hãy sao lưu (Export) trước nếu cần.
+
+**Cách 1: phpMyAdmin**
+
+1. Mở [http://localhost/phpmyadmin/](http://localhost/phpmyadmin/).
+2. Tạo cơ sở dữ liệu `tuition_system` với bảng mã `utf8mb4_unicode_ci` (nếu chưa có), rồi chọn nó ở danh sách bên trái.
+3. Bấm tab **Nhập** (Import), đặt **Bảng mã của tập tin** (Character set of the file) là **utf-8**, rồi nhập lần lượt:
+   1. `database/schema.sql` — 15 bảng, khóa ngoại RESTRICT, chỉ mục.
+   2. `database/create_app_user.sql` — tạo người dùng `tuition_user` (quyền SELECT/INSERT/UPDATE/DELETE trên `tuition_system` và `tuition_test`).
+   3. `database/seed.sql` — dữ liệu mẫu: 4 học kỳ, 24 sinh viên, 22 hồ sơ học phí, 10 miễn giảm, 26 giao dịch sổ cái, 5 yêu cầu hoàn tiền, 7 hóa đơn.
+4. Khởi tạo mật khẩu Bcrypt cho các tài khoản mẫu (PowerShell):
+   ```powershell
+   cd C:\xampp\htdocs\tuition-system
+   C:\xampp\php\php.exe database\seed_users.php
+   ```
+
+**Cách 2: Dòng lệnh PowerShell**
+
+XAMPP không thêm `mysql`/`php` vào PATH, nên dùng đường dẫn đầy đủ:
+
+```powershell
+cd C:\xampp\htdocs\tuition-system
+$mysql = "C:\xampp\mysql\bin\mysql.exe"
+& $mysql -u root -e "CREATE DATABASE IF NOT EXISTS tuition_system CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+& $mysql -u root tuition_system -e "source database/schema.sql"
+& $mysql -u root -e "source database/create_app_user.sql"
+& $mysql -u root tuition_system -e "source database/seed.sql"
+C:\xampp\php\php.exe database\seed_users.php
+```
+
+*(Có thể nạp lại `schema.sql`, `seed.sql` và chạy `seed_users.php` nhiều lần liên tiếp mà không lỗi.)*
+
+---
+
+### Bước 4: Mở ứng dụng và Đăng nhập
+Mở trình duyệt web và truy cập:
+
+👉 **[http://localhost/tuition-system/](http://localhost/tuition-system/)**
+
+Đăng nhập bằng tài khoản Quản trị viên:
+- **Tên đăng nhập:** `admin`
+- **Mật khẩu:** `Admin@123`
+
+---
+
+### Tùy chỉnh Nâng cao (Tùy chọn)
+- **Tệp cấu hình**: Không cần làm gì để chạy thử. Khi chưa có `config/config.php`, backend tự dùng `config/config.example.php` (User: `tuition_user`, Mật khẩu: `TuitionApp2026!Sec`, Database: `tuition_system`).
+- Muốn đổi cổng, tên database, mật khẩu…: chép `config/config.example.php` thành `config/config.php` rồi sửa. Tệp `config.php` đã có trong `.gitignore`, nên không bị đưa lên Git.
+- **Môi trường sản xuất (Production)**: Luôn đổi mật khẩu người dùng mặc định và đặt `'simulation_enabled' => false` trong `config/config.php`.
+
+## Tài khoản dùng thử
+
+Các tài khoản sau phục vụ kiểm thử và đánh giá chức năng trên môi trường cục bộ.
+
+> [!WARNING]
+> Đây là thông tin đăng nhập mẫu. Không sử dụng các mật khẩu này trong môi trường production. Hãy thay đổi hoặc vô hiệu hóa tài khoản thử nghiệm trước khi triển khai thực tế.
+
+| Tên đăng nhập | Mật khẩu | Vai trò | Mục đích |
+| --- | --- | --- | --- |
+| `admin` | `Admin@123` | `admin` | Kiểm thử các nghiệp vụ quản trị toàn quyền |
+| `staff01` | `Staff@123` | `admin` | Kiểm thử người thao tác trong Audit Log và biên lai |
+| `sv001` | `Student@001` | `student` | Sinh viên SV001 (Nguyễn Văn An): đã nộp đủ HK1 2026-2027, có nợ một phần và nộp thừa HK2 2025-2026 chặn thanh toán |
+| `sv002` | `Student@002` | `student` | Sinh viên SV002 (Trần Thị Bình): thanh toán một phần HK1 2026-2027 còn nợ 10.300.000 ₫, dùng cho kiểm thử nộp tiền |
+| `sv003` | `Student@003` | `student` | Sinh viên SV003 (Lê Hoàng Cường): chưa thanh toán HK1 2026-2027 còn nợ 8.200.000 ₫ |
+| `sv011` | `Student@011` | `student` | Sinh viên SV011 (Ngô Quang Khải): chưa có hồ sơ học phí, dùng cho kiểm thử đăng ký tín chỉ học kỳ mở |
+| `sv006` | `Student@006` | `student` | Sinh viên SV006 (Võ Minh Đức): tài khoản có cờ `must_change_password = 1`, dùng cho kiểm thử bắt buộc đổi mật khẩu |
+
+## Chạy kiểm thử tự động
+
+> Kết quả chạy gần nhất (14/11/2026, sau đợt sửa lỗi; PHP 8.5.12, MariaDB 10.11.16): backend **341/341 PASS**, frontend **30/30 PASS**, quét bảo mật **63 PASS / 0 FAIL / 2 WARN** (2 WARN là việc cấu hình khi triển khai), hiệu năng **mọi thao tác < 200 ms** với 1 người dùng (chậm nhất: đăng nhập ~107 ms). Chi tiết xem [docs/BAO_CAO_KIEM_THU.md](docs/BAO_CAO_KIEM_THU.md).
+
+Tất cả các lệnh dưới đây chạy tại thư mục gốc dự án và yêu cầu **Apache + MySQL đang chạy** (bộ test gọi API thật qua `http://localhost/tuition-system/api`).
+
+| Bộ kiểm thử | Lệnh | Thời gian |
+| --- | --- | --- |
+| Tích hợp backend | `C:\xampp\php\php.exe tests\run.php` | ~30 giây |
+| Đơn vị frontend | Mở `http://localhost/tuition-system/?test=1` | tức thì |
+| Hiệu năng (ngưỡng 200 ms) | `C:\xampp\php\php.exe tests\perf.php` (tùy chọn `--limit=200 --n=30`) | ~15 giây |
+| Quét bảo mật | `C:\xampp\php\php.exe tests\security_scan.php` | ~10 giây |
+
+`perf.php` và `security_scan.php` dùng database `tuition_test`, nên cần chạy `tests\run.php` ít nhất một lần trước để tạo database này.
+
+### Backend
+
+```powershell
+C:\xampp\php\php.exe tests\run.php
+```
+
+Bộ kiểm thử sử dụng cơ sở dữ liệu riêng `tuition_test` (tài khoản `root` không mật khẩu của XAMPP), tự động reset bảng và nạp dữ liệu mẫu trước khi kiểm tra (xác minh số lượng chuẩn: 24 sinh viên, 22 hồ sơ học phí, 10 miễn giảm, 26 giao dịch sổ cái, 5 yêu cầu hoàn tiền, 7 hóa đơn). Gồm **341 bài kiểm thử** tích hợp thuộc 32 nhóm quy tắc nghiệp vụ và bảo mật:
+
+Các nội dung được kiểm tra gồm:
+
+- Tính học phí gốc, miễn giảm theo phần trăm hoặc số tiền cố định và quy tắc làm tròn.
+- Từ chối khoản thanh toán vượt số tiền còn nợ và bảo toàn sổ cái khi giao dịch bị từ chối.
+- Các trường hợp biên: thanh toán thiếu 1 đồng, thanh toán đủ, số phải thu bằng 0 và thanh toán vượt mức.
+- Lưu snapshot đơn giá tín chỉ để không thay đổi khi đơn giá học kỳ được chỉnh sửa.
+- Quy trình hoàn tiền; giới hạn số tiền hoàn theo khoản nộp thừa khả dụng; maker-checker kiểm soát quyền duyệt.
+- Bút toán đảo mục, ngăn đảo mục lặp lại và ngăn đảo mục của giao dịch đảo mục.
+- Idempotency bằng `request_id` theo định dạng UUID trên cả luồng Quản trị và Sinh viên.
+- Đánh số biên lai nguyên tử theo ngày với định dạng `PT-YYYYMMDD-NNNN`; số thứ tự bắt đầu lại từ `0001` vào ngày mới.
+- Kiểm thử đồng thời: hai tiến trình PHP cùng thanh toán một hồ sơ; chỉ một tiến trình được chấp nhận khi khoản còn nợ không đủ cho cả hai.
+- Chuẩn hóa tìm kiếm tiếng Việt, bao gồm NFD/NFC và chữ hoa/chữ thường.
+- Ràng buộc toàn vẹn khi xóa sinh viên đã phát sinh công nợ hoặc hồ sơ.
+- Đối soát phương trình `Collected + Outstanding = Receivable`.
+- Bảo mật phiên: HTTP 401 khi chưa xác thực, HTTP 403 khi CSRF Token thiếu hoặc không hợp lệ và khóa tài khoản 15 phút sau 5 lần đăng nhập sai.
+- Kiểm tra dữ liệu nhập: chấp nhận định dạng `1.500.000` và `1,500,000`; từ chối số âm, số 0, số thập phân `1.5`, ký tự không hợp lệ và dữ liệu vượt giới hạn Unicode.
+- Từ chối ngày thanh toán trong tương lai.
+- **Phân hệ Sinh viên & Bảo mật cô lập (Parts 1-4):**
+  - Cấp tài khoản sinh viên với mật khẩu tạm 12 ký tự ngẫu nhiên (`random_bytes`), một tài khoản duy nhất cho mỗi sinh viên (HTTP 409).
+  - Bắt buộc đổi mật khẩu lần đầu (`must_change_password = 1`), chặn mọi endpoint khác với `PASSWORD_CHANGE_REQUIRED` (HTTP 403).
+  - Ràng buộc mật khẩu mới (tối thiểu 8 ký tự, có chữ và số, xác nhận khớp, từ chối tái sử dụng mật khẩu tạm thời/hiện tại).
+  - Đăng ký tín chỉ: kiểm tra giới hạn min/max theo `student_settings` (1 - 30), kiểm tra học kỳ mở và hạn đóng; tự động chụp snapshot đơn giá; chặn sửa tín chỉ khi đã có thanh toán; tự động tính lại Gross và Net.
+  - Thanh toán học phí: xử lý qua dịch vụ cổng thanh toán mô phỏng `SimulatedGateway`, lưu `gateway_ref` nguyên tử, sinh số biên lai `PT-YYYYMMDD-NNNN`, chặn thanh toán khi hồ sơ nộp thừa (`OVERPAID_BLOCKED`), từ chối phương thức `Tiền mặt`.
+  - Công nợ & Lịch sử: tổng hợp nợ đa học kỳ, hiển thị nhãn tiếng Việt chuẩn ("Thanh toán", "Đảo bút toán", "Nhận chuyển khoản", "Chuyển đi", "Hoàn tiền"), số dư lũy kế từng học kỳ, từ chối khoảng ngày `to < from` và khoảng ngày vượt quá 5 năm; yêu cầu hoàn tiền đang chờ duyệt hiển thị cảnh báo riêng.
+  - Cô lập tuyệt đối: Sinh viên A gọi dữ liệu hoặc thanh toán vào hồ sơ/biên lai của Sinh viên B nhận HTTP 404; từ chối mọi request chứa trường `student_id` trong body (HTTP 400); Admin gọi endpoint sinh viên nhận HTTP 403; Sinh viên gọi endpoint admin nhận HTTP 403.
+- **Hóa đơn thanh toán học phí sinh viên (Part 1 - Suite 30):**
+  - Sinh hóa đơn điện tử tự động, nguyên tử và bất biến ngay sau khi sinh viên hoàn tất thanh toán trực tuyến (Mã QR hoặc Thẻ Visa/Mastercard).
+  - Đánh số hóa đơn không có khoảng cách: `HD-YYYYMMDD-NNNN` qua bảng `bill_counters`.
+  - Snapshot JSON đầy đủ và bất biến ghi nhận thông tin trường học, sinh viên, học kỳ, chi tiết học phí (Gross, Miễn giảm, Net), thanh toán (số tiền, số biên lai, thương hiệu thẻ, 4 số cuối thẻ masked) và công nợ trước/sau đợt thanh toán.
+  - Tải hóa đơn HTML độc lập (`GET /api/student/bills/{id}/download`) với `Content-Disposition: attachment; filename="bill-HD-....html"`, mã hóa UTF-8 an toàn, không chứa script, xóa sạch số thẻ nhạy cảm.
+  - Cô lập truy cập: Sinh viên A không thể xem hoặc tải hóa đơn của Sinh viên B (HTTP 404).
+- **Bảo mật phiên làm việc & Đăng xuất khi đóng tab / trình duyệt (Part 2 - Suite 31):**
+  - Cookie phiên `TUITION_SESSID` có `lifetime = 0` (không có `Max-Age` và không có `Expires`).
+  - Idle timeout: Tự động hủy phiên sau 30 phút không hoạt động (HTTP 401 `SESSION_EXPIRED`).
+  - Absolute lifetime: Tự động hủy phiên sau tối đa 8 giờ bất kể hoạt động (HTTP 401 `SESSION_MAX_LIFETIME`).
+  - Đăng xuất khi đóng tab cuối cùng bằng `navigator.sendBeacon` gửi `logout_token` trong bộ nhớ tới `POST /api/logout-beacon`.
+  - Bảo toàn phiên khi F5 / tải lại trang và chuyển hướng trang.
+  - Kiểm soát chặt chẽ `logout_token`: hủy phiên nếu khớp, từ chối token sai (204 không hủy phiên), chặn trường lạ và dữ liệu vượt 1024 bytes (HTTP 400).
+- **Dữ liệu mẫu mở rộng & Tình huống thực tế (Part 3 - Suite 32):**
+  - Bổ sung Học kỳ 4 (Học kỳ 1 2026-2027) và 11 sinh viên mới (SV014 - SV024) bao phủ các trường hợp thực tế: sinh viên đóng học phí nhiều đợt (trả góp), học bổng toàn phần 100%, miễn giảm cố định vượt một phần học phí, nộp muộn sau hạn đăng ký, sinh viên rút hồ sơ được hoàn tiền kèm bút toán đảo mục, tên chứa ký tự/dấu hiếm, tên dài tối đa 100 ký tự UTF-8, hai sinh viên trùng tên khác mã sinh viên, tài khoản buộc đổi mật khẩu lần đầu, và tài khoản bị khóa.
+  - Toàn bộ 7 hóa đơn mẫu được đánh số liên tục không có khoảng cách (`HD-YYYYMMDD-NNNN`) khớp với biên lai (`PT-YYYYMMDD-NNNN`).
+  - Kiểm tra tính lặp lại (Repeatability): Nạp lại `schema.sql`, `seed.sql`, và `seed_users.php` hai lần liên tiếp không lỗi.
+
+### Frontend
+
+Mở ứng dụng với tham số kiểm thử:
+
+```text
+http://localhost/tuition-system/?test=1
+```
+
+Test runner frontend nằm tại `tests/tests.js` (30 test cho `calc.js`: tính học phí, miễn giảm, làm tròn, chuyển số thành chữ...). Kết quả hiện ở banner góc phải dưới màn hình, chi tiết trong Console của trình duyệt (`F12`).
+
+### Hiệu năng
+
+```powershell
+C:\xampp\php\php.exe tests\perf.php
+```
+
+Yêu cầu: **với 1 người dùng, mọi thao tác phản hồi < 200 ms** (tính theo lần chậm nhất). Script đo 37 thao tác:
+- tải trang (HTML, CSS, 4 file JS);
+- đăng nhập và 15 API đọc của quản trị viên và sinh viên;
+- 14 thao tác ghi theo đúng luồng nghiệp vụ: thêm sinh viên, tạo hồ sơ, miễn giảm, thu tiền, đảo bút toán, hoàn tiền và duyệt, đăng ký tín chỉ, thanh toán QR (tạo phiên, kiểm tra trạng thái, xác nhận), thanh toán thẻ.
+
+Có thao tác vượt ngưỡng thì in `KHÔNG ĐẠT` và trả mã thoát `1`. Cuối kết quả còn có số liệu tải đồng thời 1 / 10 / 25 / 50 người dùng, chỉ để tham khảo.
+
+Muốn thử với dữ liệu lớn: `C:\xampp\php\php.exe tests\seed_large.php --students=5000` rồi chạy lại `perf.php`. Chạy `tests\run.php` để quay về dữ liệu mẫu.
+
+### Bảo mật
+
+```powershell
+C:\xampp\php\php.exe tests\security_scan.php
+```
+
+Quét black-box qua HTTP, bổ sung cho các test bảo mật trong `run.php`: chặn truy cập tệp nhạy cảm, security headers, cờ cookie phiên, xác thực/phân quyền, CSRF, SQL injection, mass assignment, lộ thông tin lỗi, dò tài khoản qua thời gian phản hồi và cấu hình triển khai. Mức `FAIL` là lỗ hổng cần sửa; `WARN` là điểm cần xử lý trước khi triển khai thật. Lệnh trả mã thoát `1` khi có `FAIL`.
+
+## Checklist kiểm thử thủ công
+
+| STT | Kịch bản | Kết quả kỳ vọng |
+| :---: | --- | --- |
+| 1 | Đăng nhập bằng `admin` / `Admin@123`. | Đăng nhập thành công; màn hình đăng nhập được ẩn và giao diện quản trị hiển thị tên "Quản trị viên Admin". |
+| 2 | Đăng nhập bằng tên người dùng hoặc mật khẩu không hợp lệ. | Hiển thị thông báo chung: *"Sai tên đăng nhập hoặc mật khẩu."*; không tiết lộ tài khoản có tồn tại hay không. |
+| 3 | Nhập sai mật khẩu liên tiếp 5 lần cho tài khoản `admin`. | Tài khoản bị khóa tạm thời 15 phút. Lần thử tiếp theo hiển thị thông báo khóa tài khoản (HTTP 409). |
+| 4 | Đăng xuất rồi nhấn nút **Back** của trình duyệt. | Không hiển thị dữ liệu nhạy cảm; ứng dụng yêu cầu đăng nhập lại. |
+| 5 | Truy cập `/api/students` hoặc `/api/fee-records/1` khi chưa đăng nhập. | Máy chủ trả HTTP 401 cùng thông báo *"Vui lòng đăng nhập để tiếp tục."* và không trả dữ liệu. |
+| 6 | Thanh toán đúng bằng số dư còn nợ. | Giao dịch được lưu; hồ sơ chuyển sang trạng thái **Đã thanh toán đủ** và biên lai được hiển thị. |
+| 7 | Thanh toán thiếu đúng 1 VND so với số còn nợ. | Giao dịch thành công; hồ sơ ở trạng thái **Thanh toán một phần**, còn nợ 1 VND. |
+| 8 | Thanh toán nhiều hơn số còn nợ 1 VND. | Giao dịch bị từ chối với thông báo *"Số tiền vượt quá số còn nợ. Vui lòng lập yêu cầu hoàn tiền trước."*; không ghi thêm bản ghi vào sổ cái. |
+| 9 | Thêm miễn giảm vào hồ sơ đã thanh toán đủ, khiến số đã nộp lớn hơn số phải nộp. | Thao tác được chấp nhận; hồ sơ chuyển sang trạng thái **Thừa tiền** (`OVERPAID`) và không nhận thêm thanh toán. |
+| 10 | Tạo yêu cầu hoàn tiền cho khoản nộp thừa, vào "Thu học phí & Hoàn trả" > "Yêu cầu hoàn tiền" > "Hoàn tiền chờ duyệt" (`#refunds/pending`) rồi duyệt hoàn tiền. | Yêu cầu chuyển từ `pending` sang `completed`; tổng tiền đã nộp giảm và trạng thái nộp thừa được xử lý. |
+| 11 | Tạo yêu cầu hoàn tiền rồi hủy yêu cầu tại "Thu học phí & Hoàn trả" > "Yêu cầu hoàn tiền" > "Hoàn tiền chờ duyệt" (`#refunds/pending`). | Yêu cầu chuyển sang `cancelled`, có ghi nhận lý do hủy; công nợ không thay đổi. |
+| 12 | Chọn phiếu thu trong lịch sử và thực hiện **Đảo mục (Hủy)**. | Hệ thống yêu cầu lý do, tạo bút toán đảo mục đối ứng và khôi phục số dư nợ về mức trước giao dịch. |
+| 13 | Nhấp đúp nhanh vào nút **Ghi nhận phiếu thu**. | Nút gửi bị vô hiệu hóa trong lúc xử lý; `request_id` bảo đảm không tạo giao dịch trùng. |
+| 14 | Ngắt mạng khi nhấn Lưu, sau đó kết nối lại và thử lại. | Hiển thị thông báo lỗi mạng bằng tiếng Việt; dữ liệu đã nhập trên biểu mẫu được giữ lại. |
+| 15 | Tìm sinh viên bằng từ khóa `nguyen` hoặc `Nguyễn`. | Cả hai từ khóa đều tìm được sinh viên họ Nguyễn, gồm SV001 Nguyễn Văn An và SV005 Nguyễn Thị Hòa. |
+| 16 | Lọc lịch sử giao dịch theo khoảng ngày và học kỳ. | Danh sách sổ cái chỉ hiển thị giao dịch thuộc khoảng thời gian và học kỳ đã chọn. |
+| 17 | Kiểm tra thẻ Thống kê và Báo cáo đối soát công nợ. | Phương trình `Đã thực thu + Còn phải thu = Tổng phải thu` cân bằng và hiển thị nhãn **Khớp 100%**. |
+| 18 | Xem trước và in biên lai. | Biên lai có số biên lai, số tiền bằng số, số tiền bằng chữ và số dư còn nợ. Khi in, CSS `@media print` chỉ hiển thị mẫu biên lai. |
+| 19 | Tải lại trang hoặc mở lại trình duyệt khi đã đăng nhập. | Phiên làm việc được duy trì bằng cookie session; dữ liệu tài chính được tải từ cơ sở dữ liệu. |
+| 20 | Dừng Apache trong XAMPP rồi thao tác trên giao diện. | Hiển thị thông báo *"Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại kết nối mạng hoặc XAMPP."*; dữ liệu đang nhập không bị mất. |
+| 21 | Dừng MySQL trong XAMPP rồi tải lại trang. | Hiển thị thông báo *"Đã xảy ra lỗi hệ thống. Vui lòng thử lại."*; không để lộ mã nguồn, câu lệnh SQL hoặc stack trace. |
+| 22 | Kiểm tra giao diện ở chiều rộng màn hình 360px. | Bố cục responsive; thanh điều hướng và bảng dữ liệu có thể cuộn ngang mà không làm vỡ giao diện. |
+| 23 | Tạo lại hồ sơ học phí cho SV001 trong HK1 2026-2027. | Thông báo hồ sơ trùng lặp xuất hiện, giá trị trên biểu mẫu được giữ nguyên, nhấn "Mở hồ sơ hiện có" sẽ mở hồ sơ tương ứng. |
+| 24 | Mở hồ sơ SV007 trong HK2 2025-2026. | Cảnh báo nộp thừa (Overpaid) hiển thị, nhấn "Xử lý số tiền thừa" hiển thị số dư thừa khả dụng là 700.000 VND. |
+| 25 | Chuyển 700.000 VND từ HK2 2025-2026 sang HK1 2026-2027 của SV007. | Hộp thoại xác nhận hiển thị bằng tiếng Việt; sau khi đồng ý, chuyển tiền thành công, hồ sơ HK2 chuyển sang Đã thanh toán đủ (đã nộp 7.500.000 VND), hồ sơ HK1 giảm còn nợ xuống 9.500.000 VND. |
+| 26 | Thực hiện hoàn tiền 700.000 VND trên bản dữ liệu mới của SV007 HK2 2025-2026. | Yêu cầu hoàn tiền ở trạng thái chờ duyệt (pending); hồ sơ vẫn giữ cảnh báo nộp thừa cho đến khi duyệt hoàn tất. |
+| 27 | Hủy yêu cầu hoàn tiền đang chờ duyệt của SV007. | Yêu cầu chuyển sang đã hủy; số tiền nộp thừa khả dụng quay trở lại mức 700.000 VND. |
+| 28 | Thử đảo bút toán khoản thu 8.200.000 VND sau khi đã chuyển tiền. | Bị từ chối với thông báo "Không thể đảo bút toán vì số tiền đã được hoàn hoặc chuyển đi." và tổng tiền nộp không bị âm. |
+| 29 | Tìm kiếm SV009 "Đoàn Văn Ơn Ích" bằng từ khóa `don` và `đoàn`. | Cả hai từ khóa đều tìm được đúng SV009 nhờ cơ chế tìm kiếm không dấu mở rộng. |
+| 30 | Kiểm tra hiển thị bảng sinh viên với tên 40 ký tự của SV010. | Hiển thị đầy đủ tên SV010 "Trương Thị Ánh Tuyết Hoàng Thị Hồng Loan", bảng dữ liệu co giãn chuẩn, không tràn viền. |
+| 31 | Xóa sinh viên SV011 (lớp NULL, chưa có hồ sơ học phí). | Xóa thành công; sinh viên bị xóa hoàn toàn khỏi hệ thống mà không vướng ràng buộc khóa ngoại. |
+| 32 | Xem chi tiết và lịch sử thanh toán của SV012 "Bùi Hữu Thắng". | Hiển thị hồ sơ học phí (miễn giảm 50%), gồm 2 khoản nộp tiền và 1 hoàn tiền với số dư nợ lũy kế khớp 100%. |
+| 33 | Thêm sinh viên với mã viết thường `sv013`. | Hệ thống tự động chuẩn hóa và lưu trữ thành chữ in hoa `SV013`. |
+| 34 | Nhập dữ liệu không hợp lệ (số tiền sai định dạng, ngày tương lai, ký tự đặc biệt). | Thông báo lỗi inline hiển thị trực tiếp dưới từng trường nhập với viền đỏ và icon ⚠️; focus tự động về trường lỗi đầu tiên; thông báo tự xóa khi nhập giá trị hợp lệ. |
+
+## Quy trình thiết lập tài khoản sinh viên & 4 chức năng Cổng Sinh viên
+
+### 1. Quy trình thiết lập tài khoản sinh viên (Student Account Setup Steps)
+1. **Quản trị viên cấp tài khoản mới**:
+   - Quản trị viên đăng nhập hệ thống (`admin` / `Admin@123`), chuyển đến tab **Sinh viên**.
+   - Tại danh sách sinh viên, nhấn nút **🔑 Tài khoản** trên dòng của sinh viên cần cấp.
+   - Hộp thoại quản lý tài khoản mở ra: nếu sinh viên chưa có tài khoản, nhấn **"Cấp tài khoản mới"**. Hệ thống tạo tài khoản:
+     - `username`: mã sinh viên viết thường (ví dụ: `sv001`, `sv011`), lưu trữ chuẩn hóa.
+     - Mật khẩu tạm thời: chuỗi 12 ký tự ngẫu nhiên kết hợp chữ hoa, chữ thường, chữ số và ký tự đặc biệt sinh bằng `random_bytes`, băm bằng `password_hash`.
+     - Cờ `must_change_password = 1`.
+   - Mỗi sinh viên chỉ có duy nhất 1 tài khoản; tạo trùng sẽ nhận lỗi HTTP 409: *"Sinh viên này đã có tài khoản."*
+   - Quản trị viên sao chép mật khẩu tạm thời và gửi cho sinh viên (mật khẩu hiển thị 1 lần duy nhất trong phản hồi). Cả hai hành động tạo và đặt lại mật khẩu đều được ghi nhật ký kiểm toán (Audit Log).
+   - *(Khởi tạo hàng loạt mẫu)*: Sử dụng lệnh CLI `php database/seed_users.php`.
+2. **Quản trị viên đặt lại mật khẩu**:
+   - Khi sinh viên cần cấp lại mật khẩu, quản trị viên mở hộp thoại **🔑 Tài khoản** của sinh viên đó và bấm **"Đặt lại mật khẩu"**.
+   - Hệ thống sinh mật khẩu tạm thời 12 ký tự mới tương tự và bật lại cờ `must_change_password = 1`.
+
+### 2. Bốn chức năng nghiệp vụ của Cổng Sinh viên
+1. **Đăng ký tín chỉ (Credit Registration):**
+   - Sinh viên chỉ xem được các học kỳ đang mở đăng ký (`registration_open = 1` và ngày hiện tại ≤ `registration_close`).
+   - Nhập số tín chỉ trong giới hạn cấu hình (`student_settings`: từ 1 đến 30).
+   - Khung xem trước tính toán tức thời học phí gốc (Gross) và học phí thực nộp (Net) bằng thư viện `calc.js`.
+   - Sinh viên được phép điều chỉnh số tín chỉ khi chưa phát sinh thanh toán (`total_paid = 0`). Sau khi đã nộp tiền, việc thay đổi tín chỉ bị khóa (HTTP 422).
+2. **Tra cứu công nợ học phí (Tuition Debt):**
+   - Hiển thị tổng nợ tồn đọng trên tất cả các học kỳ.
+   - Bảng *"Học phí chưa thanh toán"* lọc riêng các học kỳ có số nợ > 0 kèm nút "Nộp ngay".
+   - Bảng toàn bộ hồ sơ hiển thị đầy đủ chi tiết: số tín chỉ, đơn giá snapshot, Gross, miễn giảm (số tiền + lý do), Net, đã nộp, còn nợ, trạng thái thanh toán và cảnh báo nộp thừa nếu có.
+3. **Thanh toán học phí trực tuyến (Tuition Payment):**
+   - Hỗ trợ 2 phương thức thanh toán mô phỏng độc quyền cho sinh viên:
+     - **📱 Mã QR (Mô phỏng):** Khởi tạo phiên thanh toán với thời hạn 15 phút (`POST /api/student/fee-records/{id}/payment-sessions`). Mã QR được render hoàn toàn phía client bằng thư viện JavaScript thuần `qrcode.js` (không CDN, không phụ thuộc bên ngoài). Giao diện tự động đếm ngược thời gian hết hạn, tự động thăm dò (polling) trạng thái mỗi 3 giây, cung cấp nút *"Tôi đã thanh toán"* (kiểm tra thủ công), nút *"Hủy phiên"* và nút *"Mô phỏng thanh toán thành công"* (khi cờ `simulation_enabled` được bật).
+     - **💳 Thẻ Visa/Mastercard (Mô phỏng):** Cho phép nhập thông tin thẻ với cơ chế kiểm tra định dạng và thuật toán Luhn trực tiếp tại frontend (hiển thị lỗi inline ngay khi nhập/submit) và máy chủ xác thực lại nghiêm ngặt (`POST /api/student/fee-records/{id}/card-payments`). Xử lý qua cổng `SimulatedCardGateway` với bộ thẻ kiểm thử chuẩn (`4111 1111 1111 1111` chấp thuận, `5555 5555 5555 4444` từ chối, `4000 0000 0000 0002` timeout 502). Thông tin nhạy cảm (số thẻ, CVV, ngày hết hạn) được xóa sạch khỏi DOM ngay khi gửi và **tuyệt đối không bao giờ** được ghi vào cơ sở dữ liệu, nhật ký kiểm toán, log hệ thống hay phản hồi API.
+   - Nút thanh toán tự động vô hiệu hóa trong lúc giao dịch xử lý để chống nhấp đúp.
+   - Xử lý nguyên tử thông qua hàm giao dịch dùng chung `execute_payment_transaction` với khóa dòng `SELECT ... FOR UPDATE`, đối soát số dư thời gian thực chống nộp thừa, sinh mã giao dịch `GW-YYYYMMDD-HEX` và số biên lai `PT-YYYYMMDD-NNNN`.
+   - Đảm bảo tính bất biến trùng lặp (Idempotent by `request_id`). Khi thành công, hiển thị biên lai và liên kết xem / in biên lai.
+4. **Lịch sử thanh toán & Biến động số dư (Payment History):**
+   - Liệt kê các giao dịch thu tiền, đảo mục, chuyển tiền và các yêu cầu hoàn tiền đã hoàn tất kèm số dư lũy kế từng học kỳ.
+   - Hiển thị nhãn tiếng Việt chuẩn: *"Thanh toán"*, *"Đảo bút toán"*, *"Nhận chuyển khoản"*, *"Chuyển đi"*, *"Hoàn tiền"*.
+   - Yêu cầu hoàn tiền đang chờ duyệt hiển thị cảnh báo riêng (*"Yêu cầu hoàn tiền đang chờ duyệt"*), không bị tính lẫn vào giao dịch hoàn tất.
+   - Bộ lọc khoảng ngày (chặn `to < from` và khoảng thời gian > 5 năm) và hỗ trợ in biên lai cho các dòng thanh toán (`payment`).
+
+---
+
+## Bảng kiểm thử thủ công phân hệ sinh viên (Hand-test Table)
+
+| STT | Các bước thực hiện (Steps) | Kết quả kỳ vọng (Expected result) |
+| :---: | --- | --- |
+| 1 | **student login with correct and wrong password**<br>1. Tại màn hình đăng nhập, nhập `sv002` và mật khẩu sai `WrongPass@123`, nhấn Đăng nhập.<br>2. Nhập lại mật khẩu đúng `Student@002`, nhấn Đăng nhập. | - Khi nhập sai: Hiển thị thông báo lỗi chung *"Sai tên đăng nhập hoặc mật khẩu."*, không tiết lộ tài khoản có tồn tại hay không.<br>- Khi nhập đúng: Đăng nhập thành công, chuyển hướng vào Cổng sinh viên, hiển thị thông tin sinh viên `Trần Thị Bình (SV002)` và chỉ xuất hiện đúng 4 chức năng sinh viên. |
+| 2 | **forced password change**<br>1. Đăng nhập tài khoản `sv006` / `Student@006` (tài khoản có `must_change_password = 1`).<br>2. Thử truy cập các chức năng khác hoặc gửi request API khác.<br>3. Thử đổi mật khẩu trùng mật khẩu tạm thời `Student@006` hoặc mật khẩu yếu (dưới 8 ký tự).<br>4. Nhập mật khẩu mới hợp lệ (ví dụ: `NewPass@2026`, gồm chữ và số, `>= 8 ký tự`), xác nhận khớp và gửi. | - Sau khi đăng nhập, hệ thống khóa toàn bộ các tab chức năng và chỉ hiển thị form "Yêu cầu Đổi mật khẩu".<br>- Mọi endpoint sinh viên khác đều trả về HTTP 403 với mã `PASSWORD_CHANGE_REQUIRED`.<br>- Tái sử dụng mật khẩu tạm thời bị từ chối với lỗi: *"Mật khẩu mới không được trùng với mật khẩu hiện tại/tạm thời."*<br>- Đổi mật khẩu thành công: Cờ `must_change_password` xóa về 0, phiên làm việc được cấp mới (`session_regenerate_id`) và chuyển vào Cổng sinh viên bình thường. |
+| 3 | **register credits for HK1 2026-2027 and see the preview**<br>1. Đăng nhập sinh viên chưa có hồ sơ `sv011` / `Student@011`.<br>2. Mở tab "Đăng ký tín chỉ", chọn học kỳ HK1 2026-2027 (đang mở đăng ký).<br>3. Nhập số tín chỉ `15`. | - Thẻ học kỳ hiển thị rõ hạn chót đăng ký và định mức học phí (850.000 ₫/tín chỉ).<br>- Khung xem trước tính toán tức thời bằng `calc.js` hiển thị: Gross tạm tính = `12.750.000 ₫` và Net tạm tính = `12.750.000 ₫`.<br>- Bấm "Xác nhận Đăng ký Tín chỉ": Tạo mới hồ sơ học phí thành công (HTTP 201), hiển thị trạng thái đã đăng ký 15 tín chỉ. |
+| 4 | **try credits 0 and 31**<br>1. Tại ô số tín chỉ đăng ký của HK1 2026-2027, nhập `0` rồi nhấn Đăng ký.<br>2. Nhập `31` rồi nhấn Đăng ký. | - Cả hai lần đều bị chặn inline ngay trên form và máy chủ trả về HTTP 400 kèm trường lỗi `credits`: *"Số tín chỉ phải từ 1 đến 30."*<br>- Không có bản ghi hồ sơ học phí nào được tạo hoặc cập nhật trên cơ sở dữ liệu. |
+| 5 | **try to register HK2 2025-2026 (closed)**<br>1. Kiểm tra danh sách học kỳ trên giao diện Cổng sinh viên.<br>2. Gửi request API: `POST /api/student/registrations` với `semester_id = 2` (HK2 2025-2026 đã đóng đăng ký). | - Học kỳ đã đóng đăng ký không xuất hiện trong danh sách học kỳ mở trên giao diện.<br>- Request gửi lên máy chủ bị từ chối với HTTP 422 và thông báo: *"Học kỳ này đã đóng đăng ký."* |
+| 6 | **pay with Mã QR (QR Simulation flow)**<br>1. Đăng nhập tài khoản `sv002` / `Student@002`.<br>2. Vào tab "Thanh toán học phí", chọn hồ sơ còn nợ.<br>3. Chọn phương thức "Mã QR", nhập số tiền cần nộp (ví dụ: `2.000.000 ₫`).<br>4. Nhấn nút "Tạo Mã QR Thanh toán".<br>5. Quan sát mã QR được render client-side qua `qrcode.js`, đồng hồ đếm ngược 15:00 và nút "Mô phỏng thanh toán thành công".<br>6. Bấm nút "Mô phỏng thanh toán thành công" (hoặc chờ hệ thống tự động polling xác nhận). | - Hộp thoại mã QR mở ra hiển thị mã QR trực quan, số tiền `2.000.000 ₫` và đồng hồ đếm ngược 15 phút giảm từng giây.<br>- Hệ thống tự động thăm dò trạng thái mỗi 3 giây.<br>- Bấm nút mô phỏng: Máy chủ xác nhận phiên thành công (HTTP 200), tự động đóng hộp QR, hiển thị hộp chúc mừng kèm số biên lai `PT-YYYYMMDD-NNNN`, phương thức `Mã QR` và số dư nợ của hồ sơ tự động giảm tương ứng. |
+| 7 | **cancel QR session & session expiry**<br>1. Tạo một phiên thanh toán Mã QR mới.<br>2. Nhấn nút "Hủy phiên".<br>3. Kiểm tra trạng thái phiên và tạo lại mã mới. | - Khi nhấn "Hủy phiên": Phiên chuyển trạng thái `cancelled`, hộp QR đóng lại và có thông báo xác nhận.<br>- Không thể xác nhận phiên đã hủy.<br>- Nếu để mã quá 15 phút (hết thời gian đếm ngược), hệ thống tự động đánh dấu `expired` và báo lỗi *"Mã QR đã hết hạn. Vui lòng tạo mã mới."* |
+| 8 | **pay with Thẻ Visa/Mastercard (Approved)**<br>1. Vào tab "Thanh toán học phí", chọn hồ sơ còn nợ.<br>2. Chọn phương thức "Thẻ Visa/Mastercard".<br>3. Nhập số thẻ `4111 1111 1111 1111`, tên `TRAN THI BINH`, ngày hết hạn `12/28`, CVV `123`.<br>4. Nhấn nút "Xác nhận Thanh toán Thẻ". | - Giao diện tự động định dạng số thẻ theo cụm 4 chữ số.<br>- Ngay khi gửi, toàn bộ thông tin thẻ trên các ô nhập được xóa sạch khỏi DOM.<br>- Giao dịch thành công (HTTP 201), phương thức lưu trữ là `Thẻ Visa/Mastercard`, ghi chú lưu `Thanh toán thẻ Visa (*1111)`, tuyệt đối không lưu số thẻ đầy đủ hay CVV.<br>- Công nợ được cập nhật ngay lập tức. |
+| 9 | **pay with Thẻ Visa/Mastercard (Declined & Timeout)**<br>1. Nhập thẻ bị từ chối `5555 5555 5555 4444`.<br>2. Bấm thanh toán.<br>3. Thử tiếp với thẻ timeout `4000 0000 0000 0002`.<br>4. Thử thẻ sai thuật toán Luhn `4111 1111 1111 1112`. | - Với thẻ `5555...4444`: Máy chủ trả về HTTP 422 với thông báo *"Thẻ bị từ chối. Vui lòng kiểm tra thông tin hoặc dùng thẻ khác."*<br>- Với thẻ `4000...0002`: Máy chủ trả về HTTP 502 với thông báo *"Thanh toán chưa được xử lý. Vui lòng thử lại sau."*<br>- Với thẻ sai Luhn: Bị chặn ngay tại frontend với thông báo lỗi inline dưới ô số thẻ mà không gửi request lên máy chủ. |
+| 10 | **pay more than outstanding**<br>1. Với hồ sơ SV002 còn nợ 10.300.000 ₫, nhập số tiền thanh toán là `10.300.001 ₫` (vượt 1 đồng).<br>2. Nhấn nút "Xác nhận Thanh toán". | - Máy chủ từ chối với HTTP 422 và thông báo: *"Số tiền vượt quá số còn nợ. Vui lòng lập yêu cầu hoàn tiền trước."*<br>- Không có giao dịch nào được ghi vào sổ cái và không tạo phiên thanh toán. |
+| 11 | **student A tries to view student B's record by editing the URL**<br>1. Đăng nhập sinh viên `sv001`.<br>2. Thử nộp tiền vào hồ sơ của SV002: `POST /api/student/fee-records/2/payments` hoặc `POST /api/student/fee-records/2/payment-sessions`.<br>3. Thử tra cứu biên lai của SV002: `GET /api/receipts/PT-20260905-0001`.<br>4. Thử điều chỉnh đăng ký của SV002: `PUT /api/student/registrations/3`. | - Mọi request truy vấn hoặc can thiệp vào dữ liệu của sinh viên khác đều bị máy chủ trả về **HTTP 404** (*"Không tìm thấy hồ sơ học phí."* hoặc *"Không tìm thấy phiên thanh toán."*).<br>- Tuyệt đối không để lộ sự tồn tại hay dữ liệu tài chính của sinh viên khác. |
+| 12 | **print a student receipt**<br>1. Sau khi thanh toán thành công hoặc vào tab "Lịch sử thanh toán", bấm nút "🖨️ In biên lai" tại một dòng giao dịch thu tiền (`payment`).<br>2. Xem trước mẫu in biên lai và bấm In. | - Khung biên lai điện tử mở ra với đầy đủ thông tin: Mã SV, Họ tên, Học kỳ, Phương thức, Số tiền bằng số, Số tiền bằng chữ tiếng Việt chuẩn, Số dư nợ còn lại.<br>- Khi xem trước trang in (Print Preview), CSS `@media print` chỉ hiển thị mẫu biên lai, ẩn toàn bộ thanh điều hướng, nút đóng và các thành phần thừa trên màn hình. |
+| 13 | **history filter with to < from**<br>1. Vào tab "Lịch sử thanh toán".<br>2. Chọn Từ ngày: `01/10/2026`, Đến ngày: `01/09/2026`.<br>3. Nhấn nút "🔍 Lọc dữ liệu". | - Hệ thống từ chối lọc và hiển thị thông báo lỗi inline trực tiếp: *"Đến ngày không được nhỏ hơn từ ngày."*<br>- Máy chủ từ chối với HTTP 400 và trường lỗi `to`. |
+| 14 | **admin screen still works for admin accounts**<br>1. Đăng nhập với tài khoản quản trị viên `admin` / `Admin@123`.<br>2. Kiểm tra các chức năng quản trị: Quản lý sinh viên, Cấp tài khoản sinh viên, Lập hồ sơ học phí, Miễn giảm, Thu học phí & Hoàn trả (Toàn bộ giao dịch, Yêu cầu hoàn tiền: Hoàn tiền chờ duyệt, Hồ sơ chờ duyệt), Sổ cái giao dịch, Báo cáo đối soát tài chính. | - Toàn bộ chức năng quản trị viên hoạt động chuẩn xác, giữ nguyên 100% hành vi ban đầu.<br>- Quản trị viên gọi các endpoint sinh viên `/api/student/*` đều nhận HTTP 403 (bị từ chối). |
+| 15 | **student logs out then presses Back**<br>1. Sinh viên `sv001` đăng nhập, kiểm tra thông tin công nợ.<br>2. Nhấn nút "Đăng xuất".<br>3. Sau khi đã về màn hình đăng nhập, nhấn nút **Back** trên thanh công cụ của trình duyệt. | - Cơ chế `popstate` và `pageshow` kích hoạt kiểm tra phiên làm việc qua `GET /api/me`.<br>- Phiên đã bị hủy trên máy chủ, giao diện lập tức ẩn toàn bộ container sinh viên và giữ nguyên màn hình đăng nhập, không để lộ dữ liệu từ cache trình duyệt. |
+| 16 | **student bill view, download and print**<br>1. Đăng nhập tài khoản `sv002` / `Student@002`.<br>2. Thực hiện thanh toán học phí thành công (qua Mã QR hoặc Thẻ Visa/Mastercard).<br>3. Tại hộp thông báo "Thanh toán thành công!", quan sát mã hóa đơn `HD-YYYYMMDD-NNNN` và 3 nút: "Xem hóa đơn", "Tải hóa đơn", "In hóa đơn".<br>4. Nhấn "Xem hóa đơn" để mở modal chi tiết hóa đơn.<br>5. Nhấn "Tải hóa đơn" để tải về tệp `bill-HD-....html`.<br>6. Mở tab "Lịch sử thanh toán", bấm nút "📄 Hóa đơn" tại dòng giao dịch. | - Hộp thông báo hiển thị đúng mã hóa đơn `HD-YYYYMMDD-NNNN`.<br>- Bấm "Xem hóa đơn": Modal mở ra hiển thị đầy đủ thông tin sinh viên, học kỳ, bảng phân tích học phí, chi tiết thanh toán, số dư còn lại và ghi chú hóa đơn điện tử.<br>- Bấm "Tải hóa đơn": Trình duyệt tải về tệp HTML độc lập, mở ra hiển thị giao diện hóa đơn đẹp mắt, không chứa thẻ `<script>` hay số thẻ đầy đủ.<br>- Tại tab Lịch sử thanh toán, nút "📄 Hóa đơn" mở đúng hóa đơn tương ứng của giao dịch sinh viên. |
+| 17 | **print bill and browser Save as PDF**<br>1. Tại modal xem hóa đơn hoặc hộp thông báo thành công, nhấn nút "In hóa đơn".<br>2. Hộp thoại in (`window.print()`) của trình duyệt xuất hiện.<br>3. Chọn máy in hoặc chọn mục "Save as PDF" (Lưu dưới dạng PDF). | - Hộp thoại in hiển thị bản xem trước hóa đơn được định dạng chuyên nghiệp trên 1 trang A4.<br>- CSS `@media print` ẩn hoàn toàn các thanh điều hướng, nút bấm, nền trang và modal overlays.<br>- Khi lưu dạng PDF, tệp PDF xuất ra nguyên vẹn, sắc nét, đầy đủ thông tin pháp lý của hóa đơn điện tử phục vụ lưu trữ. |
+| 18 | **session hardening: logout on tab/browser close**<br>1. Đăng nhập tài khoản `sv002`.<br>2. Đóng tab trình duyệt (hoặc đóng toàn bộ cửa sổ trình duyệt).<br>3. Mở tab mới và truy cập lại URL ứng dụng: `http://localhost/tuition-system/`. | - Sự kiện `pagehide` kích hoạt `navigator.sendBeacon` gửi `logout_token` tới `/api/logout-beacon` và máy chủ hủy phiên ngay lập tức.<br>- Khi mở lại trang, ứng dụng hiển thị màn hình Đăng nhập (yêu cầu đăng nhập lại). Gọi `GET /api/me` trả về HTTP 401. |
+| 19 | **page reload does NOT logout student**<br>1. Đăng nhập tài khoản `sv002`.<br>2. Nhấn phím F5 hoặc nút Reload của trình duyệt nhiều lần.<br>3. Điều hướng giữa các tab chức năng trong Cổng sinh viên. | - Phiên làm việc được duy trì liên tục.<br>- Hệ thống nhận diện sự kiện tải lại trang (reload) qua `performance.getEntriesByType('navigation')` hoặc `performance.navigation.type`, không gửi beacon đăng xuất khi tải lại.<br>- Người dùng vẫn ở trạng thái đăng nhập bình thường. |
+| 20 | **multi-tab lifecycle tracking**<br>1. Đăng nhập tài khoản `sv002` trên tab 1.<br>2. Nhân bản (Duplicate) hoặc mở ứng dụng trên tab 2.<br>3. Đóng tab 1; tiếp tục thao tác trên tab 2.<br>4. Đóng tiếp tab 2. Mở tab 3 truy cập lại hệ thống. | - Bộ đếm tab `tuition_tab_tracker` và `BroadcastChannel` phối hợp theo dõi số lượng tab đang mở.<br>- Khi đóng tab 1, số lượng tab giảm từ 2 xuống 1; KHÔNG gửi beacon đăng xuất; tab 2 tiếp tục hoạt động bình thường.<br>- Khi đóng tab 2 (tab cuối cùng, count về 0), hệ thống gửi beacon hủy phiên lên máy chủ.<br>- Tab 3 mở lại sau đó buộc người dùng phải đăng nhập lại. |
+
+## Giới hạn đã biết
+
+- **Lưu phiên:** Ứng dụng sử dụng cơ chế session lưu bằng tệp mặc định của PHP thông qua `session_save_path()`. Thời gian chờ không hoạt động (idle timeout) là 30 phút và vòng đời tối đa của phiên (absolute lifetime) là 8 giờ.
+- **HTTPS trên XAMPP cục bộ:** Môi trường XAMPP mặc định chưa cấu hình SSL/HTTPS. Cờ `Secure` của cookie session được tắt khi kết nối không sử dụng HTTPS và chỉ bật khi phát hiện kết nối bảo mật qua cổng HTTPS (443).
+- **Cổng thanh toán mô phỏng & Miễn trừ trách nhiệm (Simulation Disclaimer):** Toàn bộ chức năng thanh toán trực tuyến của sinh viên (bao gồm quét mã QR và nhập thẻ thanh toán quốc tế Visa/Mastercard) là **mô phỏng kỹ thuật phục vụ mục đích học tập, thực hành và kiểm thử (Simulation Only)**. Hệ thống **không** kết nối đến bất kỳ cổng thanh toán, đơn vị xử lý thẻ hoặc ngân hàng trung gian thực tế nào (như Napas, VietQR, VNPAY, MoMo, Visa/Mastercard Cybersource...). Các số thẻ sử dụng là số thẻ kiểm thử sandbox mẫu. Mọi thông tin thẻ nhạy cảm (số thẻ, CVV, ngày hết hạn) được hủy ngay sau khi kiểm tra và **tuyệt đối không bao giờ** được ghi vào cơ sở dữ liệu hay log hệ thống.
+- **In hóa đơn và lưu PDF từ trình duyệt:** Trình duyệt hiện đại (Chrome, Edge, Firefox) hỗ trợ chức năng *"Save as PDF"* (Lưu dưới dạng PDF) trong hộp thoại in (`window.print()`). Kết hợp cùng định dạng in `@media print`, hóa đơn sinh viên được tối ưu chuẩn xác trên khổ giấy A4, gọn gàng trong 1 trang duy nhất không chứa thanh công cụ hay nút bấm.
+- **Multi-tenancy:** Hệ thống hiện được thiết kế theo mô hình single-tenant, phục vụ một đơn vị đào tạo.
+- **Chuyển số tiền thành chữ:** Chức năng hỗ trợ tiếng Việt cho các giá trị VND từ hàng đơn vị đến hàng trăm tỷ đồng và có kiểm thử tự động.
+- **Form liên hệ (`pages/contact.php`) chỉ là giao diện mẫu:** hiển thị "đã tiếp nhận" nhưng không lưu hay gửi phản hồi đi đâu.
+- **Dữ liệu kiểm thử hiệu năng nhỏ:** Kết quả hiệu năng đo trên bộ dữ liệu mẫu (24 sinh viên) và một máy cục bộ, chưa phản ánh tải thực tế với hàng nghìn sinh viên.
+
+## Vấn đề bảo mật cần xử lý trước khi triển khai
+
+Các lỗi phát hiện trong đợt kiểm thử 14/11/2026 **đã được sửa trong mã nguồn** (chi tiết: [docs/BAO_CAO_KIEM_THU.md](docs/BAO_CAO_KIEM_THU.md), mục 6). Còn lại 3 việc **phải làm khi triển khai thật**, vì phụ thuộc môi trường chứ không phải code:
+
+| Việc cần làm | Ở đâu |
+| --- | --- |
+| Đặt `'simulation_enabled' => false`. Khi bật, mọi kênh thanh toán của sinh viên (QR, thẻ) đều là giả lập và xóa nợ mà không thu tiền thật. | `config/config.php` |
+| Chạy HTTPS để cookie phiên tự có cờ `Secure`. | Apache |
+| Đổi mật khẩu DB `tuition_user` và mật khẩu các tài khoản mẫu, vì mật khẩu mặc định có trong `config.example.php` và các tệp SQL công khai. | `config/config.php`, `database/create_app_user.sql` |
+
+## Trạng thái yêu cầu
+
+Các yêu cầu chức năng trong đặc tả đã được triển khai và có kiểm thử tự động, bao gồm (các điểm bảo mật còn tồn đọng xem [mục trên](#vấn-đề-bảo-mật-cần-xử-lý-trước-khi-triển-khai)):
+
+- Session, CSRF, phân quyền Quản trị viên (`admin`) và Sinh viên (`student`).
+- Phân hệ Cổng Sinh viên độc lập (4 chức năng: Đăng ký tín chỉ, Tra cứu công nợ, Thanh toán qua cổng mô phỏng, Lịch sử giao dịch).
+- Cơ chế bắt buộc đổi mật khẩu lần đầu (`must_change_password`).
+- Hóa đơn thanh toán học phí sinh viên: tự động sinh hóa đơn điện tử không có khoảng cách `HD-YYYYMMDD-NNNN`, snapshot bất biến, xem/tải HTML đính kèm và in ấn tối ưu `@media print`.
+- Tăng cường bảo mật phiên: idle timeout 30 phút, absolute lifetime 8 giờ, tự động đăng xuất khi đóng tab/trình duyệt cuối cùng qua `navigator.sendBeacon` và bảo toàn phiên khi tải lại trang (reload).
+- Bộ dữ liệu mẫu mở rộng 24 sinh viên, 4 học kỳ, 22 hồ sơ học phí, 10 miễn giảm, 26 giao dịch sổ cái, 5 yêu cầu hoàn tiền, 7 hóa đơn bao phủ đầy đủ các tình huống thực tế và kiểm tra tính lặp lại.
+- Kiểm soát đồng thời bằng `FOR UPDATE`.
+- Idempotency bằng UUID `request_id`.
+- Chuẩn hóa tìm kiếm tiếng Việt không dấu.
+- Kiểm thử tự động: backend **341/341 PASS**, frontend **30/30 PASS** (chạy lại ngày 14/11/2026).

@@ -1,0 +1,256 @@
+<?php
+/**
+ * Financial Calculation Logic and Business Rules
+ */
+
+declare(strict_types=1);
+
+/**
+ * Tính học phí gốc: Số tín chỉ × Đơn giá snapshot
+ */
+function calc_gross(int $credits, int $pricePerCredit): int {
+    $c = max(0, $credits);
+    $p = max(0, $pricePerCredit);
+    return (int)round($c * $p);
+}
+
+/**
+ * Tính số tiền miễn giảm (percent hoặc fixed, làm tròn VND, không vượt quá học phí gốc)
+ */
+function calc_exemption(int $gross, string $type, $value): int {
+    $g = max(0, $gross);
+    if ($type === 'percent') {
+        $val = max(1, min(100, (float)$value));
+        return min($g, (int)round(($g * $val) / 100));
+    }
+    if ($type === 'fixed') {
+        $val = max(0, (int)$value);
+        return min($g, $val);
+    }
+    return 0;
+}
+
+/**
+ * Tính số tiền thực phải nộp (Net Due): max(0, gross - exemption)
+ */
+function calc_net_due(int $gross, int $exemption): int {
+    return max(0, $gross - $exemption);
+}
+
+/**
+ * Xác định trạng thái thanh toán và thông tin nộp thừa
+ */
+function derive_payment_status(int $totalPaid, int $netDue, int $pendingRefundsCount = 0, int $pendingRefundsSum = 0): array {
+    $p = max(0, $totalPaid);
+    $n = max(0, $netDue);
+
+    $isOverpaid = ($p > $n);
+    $overpaidAmount = $isOverpaid ? ($p - $n) : 0;
+    $outstanding = max(0, $n - $p);
+
+    if ($p <= 0 && $n > 0) {
+        $status = 'Unpaid';
+        $statusLabel = 'Chưa thanh toán';
+    } elseif ($p > 0 && $p < $n) {
+        $status = 'Partially Paid';
+        $statusLabel = 'Thanh toán một phần';
+    } else {
+        // p >= n (including net = 0 and total_paid > net)
+        $status = 'Fully Paid';
+        $statusLabel = 'Đã thanh toán đủ';
+    }
+
+    // Chờ duyệt (Pending) là trạng thái quy trình chỉ hiển thị khi hồ sơ nộp thừa VÀ có ít nhất một yêu cầu hoàn tiền đang chờ duyệt (pending)
+    $isPending = ($isOverpaid && ($pendingRefundsCount > 0 || $pendingRefundsSum > 0));
+
+    return [
+        'status'                => $status,
+        'status_label'          => $statusLabel,
+        'is_overpaid'           => $isOverpaid,
+        'overpaid_amount'       => $overpaidAmount,
+        'outstanding'           => $outstanding,
+        'net_due'               => $n,
+        'total_paid'            => $p,
+        'is_pending'            => $isPending,
+        'pending_amount'        => $isPending ? $pendingRefundsSum : 0,
+        'workflow_status'       => $isPending ? 'Pending' : null,
+        'workflow_status_label' => $isPending ? 'Chờ duyệt' : null,
+    ];
+}
+
+/**
+ * Đọc số tiền VND thành chữ tiếng Việt chuẩn cho biên lai in
+ */
+function number_to_vietnamese_words(int $amount): string {
+    $num = $amount;
+    if ($num === 0) {
+        return 'Không đồng chẵn';
+    }
+    if ($num < 0) {
+        return 'Âm ' . number_to_vietnamese_words(abs($num));
+    }
+
+    $digits = ['không', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'];
+    $units = ['', 'nghìn', 'triệu', 'tỷ', 'nghìn tỷ', 'triệu tỷ'];
+
+    $readTriple = function(int $n, bool $showZeroHundreds) use ($digits): string {
+        $h = (int)floor($n / 100);
+        $t = (int)floor(($n % 100) / 10);
+        $o = $n % 10;
+        $res = '';
+
+        if ($h > 0 || $showZeroHundreds) {
+            $res .= $digits[$h] . ' trăm ';
+        }
+
+        if ($t > 1) {
+            $res .= $digits[$t] . ' mươi ';
+            if ($o === 1) {
+                $res .= 'mốt ';
+            } elseif ($o === 5) {
+                $res .= 'lăm ';
+            } elseif ($o > 0) {
+                $res .= $digits[$o] . ' ';
+            }
+        } elseif ($t === 1) {
+            $res .= 'mười ';
+            if ($o === 5) {
+                $res .= 'lăm ';
+            } elseif ($o > 0) {
+                $res .= $digits[$o] . ' ';
+            }
+        } elseif ($t === 0 && $o > 0) {
+            if ($h > 0 || $showZeroHundreds) {
+                $res .= 'lẻ ';
+            }
+            $res .= $digits[$o] . ' ';
+        }
+
+        return trim($res);
+    };
+
+    $nStr = (string)$num;
+    $triples = [];
+    while (strlen($nStr) > 0) {
+        $triples[] = (int)substr($nStr, -3);
+        $nStr = substr($nStr, 0, -3);
+    }
+
+    $words = '';
+    for ($i = count($triples) - 1; $i >= 0; $i--) {
+        $val = $triples[$i];
+        if ($val > 0) {
+            $u = $units[$i] ?? '';
+            $tripleWords = $readTriple($val, $i < (count($triples) - 1));
+            $words .= trim($tripleWords . ' ' . $u) . ' ';
+        }
+    }
+
+    $words = trim($words);
+    // Viết hoa chữ cái đầu và thêm 'đồng chẵn'
+    $firstChar = mb_substr($words, 0, 1, 'UTF-8');
+    $restChars = mb_substr($words, 1, null, 'UTF-8');
+    return mb_strtoupper($firstChar, 'UTF-8') . $restChars . ' đồng chẵn';
+}
+
+/**
+ * Trả về câu truy vấn con (subquery) tổng hợp thông tin học phí, công nợ thay thế View v_fee_record_summaries
+ */
+function get_fee_summary_subquery(): string {
+    return "(
+        SELECT 
+            base.*,
+            CASE 
+                WHEN base.total_paid > base.net_due THEN 'Overpaid'
+                WHEN base.total_paid <= 0 AND base.net_due > 0 THEN 'Unpaid'
+                WHEN base.total_paid > 0 AND base.total_paid < base.net_due THEN 'Partially Paid'
+                ELSE 'Fully Paid'
+            END AS derived_status,
+            CASE 
+                WHEN base.total_paid > base.net_due THEN 'Nộp thừa'
+                WHEN base.total_paid <= 0 AND base.net_due > 0 THEN 'Chưa thanh toán'
+                WHEN base.total_paid > 0 AND base.total_paid < base.net_due THEN 'Thanh toán một phần'
+                ELSE 'Đã thanh toán đủ'
+            END AS derived_status_label,
+            CASE WHEN base.total_paid > base.net_due THEN 1 ELSE 0 END AS is_overpaid,
+            CASE WHEN base.total_paid > base.net_due THEN (base.total_paid - base.net_due) ELSE 0 END AS overpaid_amount,
+            GREATEST(0, base.net_due - base.total_paid) AS outstanding_amount
+        FROM (
+            SELECT 
+                fr.id AS fee_record_id,
+                fr.student_id,
+                fr.semester_id,
+                fr.registered_credits,
+                fr.rate_snapshot,
+                fr.gross_tuition,
+                ex.id AS exemption_id,
+                ex.type AS exemption_type,
+                ex.value AS exemption_value,
+                ex.reason AS exemption_reason,
+                CASE 
+                    WHEN ex.type = 'percent' THEN ROUND(fr.gross_tuition * ex.value / 100)
+                    WHEN ex.type = 'fixed' THEN LEAST(fr.gross_tuition, ex.value)
+                    ELSE 0
+                END AS exemption_amount,
+                GREATEST(0, fr.gross_tuition - (
+                    CASE 
+                        WHEN ex.type = 'percent' THEN ROUND(fr.gross_tuition * ex.value / 100)
+                        WHEN ex.type = 'fixed' THEN LEAST(fr.gross_tuition, ex.value)
+                        ELSE 0
+                    END
+                )) AS net_due,
+                COALESCE(led.payments_sum, 0) AS payments_sum,
+                COALESCE(led.reversals_sum, 0) AS reversals_sum,
+                COALESCE(rf.completed_refunds_sum, 0) AS completed_refunds_sum,
+                COALESCE(rf.pending_refunds_sum, 0) AS pending_refunds_sum,
+                COALESCE(rf.pending_refunds_count, 0) AS pending_refunds_count,
+                COALESCE(led.transfer_out_sum, 0) AS transfer_out_sum,
+                COALESCE(led.transfer_in_sum, 0) AS transfer_in_sum,
+                -- Đã nộp = thu − đảo bút toán − hoàn tiền đã duyệt − chuyển đi + nhận chuyển
+                (COALESCE(led.payments_sum, 0) - COALESCE(led.reversals_sum, 0) - COALESCE(rf.completed_refunds_sum, 0)
+                 - COALESCE(led.transfer_out_sum, 0) + COALESCE(led.transfer_in_sum, 0)) AS total_paid
+            FROM fee_records fr
+            LEFT JOIN exemptions ex ON fr.id = ex.fee_record_id
+            -- Tổng hợp sổ cái: quét ledger_entries MỘT lần, tách tổng theo loại giao dịch
+            LEFT JOIN (
+                SELECT fee_record_id,
+                       SUM(CASE WHEN entry_type = 'payment'      THEN amount END) AS payments_sum,
+                       SUM(CASE WHEN entry_type = 'reversal'     THEN amount END) AS reversals_sum,
+                       SUM(CASE WHEN entry_type = 'transfer_out' THEN amount END) AS transfer_out_sum,
+                       SUM(CASE WHEN entry_type = 'transfer_in'  THEN amount END) AS transfer_in_sum
+                FROM ledger_entries
+                GROUP BY fee_record_id
+            ) led ON fr.id = led.fee_record_id
+            -- Tổng hợp hoàn tiền: quét refund_requests MỘT lần
+            LEFT JOIN (
+                SELECT fee_record_id,
+                       SUM(CASE WHEN status = 'completed' THEN amount END) AS completed_refunds_sum,
+                       SUM(CASE WHEN status = 'pending'   THEN amount END) AS pending_refunds_sum,
+                       COUNT(CASE WHEN status = 'pending' THEN 1 END)      AS pending_refunds_count
+                FROM refund_requests
+                GROUP BY fee_record_id
+            ) rf ON fr.id = rf.fee_record_id
+        ) base
+    )";
+}
+
+/**
+ * Lấy bản ghi tổng hợp công nợ của 1 hồ sơ học phí theo fee_record_id
+ */
+function fetch_fee_record_summary(PDO $pdo, int $feeRecordId): ?array {
+    $sub = get_fee_summary_subquery();
+    $stmt = $pdo->prepare("SELECT * FROM {$sub} v WHERE v.fee_record_id = :id");
+    $stmt->execute(['id' => $feeRecordId]);
+    $res = $stmt->fetch();
+    if (!$res) {
+        return null;
+    }
+    $calc = derive_payment_status(
+        (int)$res['total_paid'],
+        (int)$res['net_due'],
+        (int)($res['pending_refunds_count'] ?? 0),
+        (int)($res['pending_refunds_sum'] ?? 0)
+    );
+    return array_merge($res, $calc);
+}
+
