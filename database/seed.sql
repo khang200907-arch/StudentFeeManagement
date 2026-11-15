@@ -111,6 +111,24 @@ INSERT INTO `students` (`id`, `student_code`, `full_name`, `name_search`, `class
 (23, 'SV023', 'Đỗ Mai Trang', 'do mai trang', 'K23-QTKD2', '2026-11-05 08:45:00', '2026-11-05 08:45:00'),
 (24, 'SV024', 'Bùi Đức Mạnh', 'bui duc manh', 'K23-CNTT2', '2026-11-05 08:50:00', '2026-11-05 08:50:00');
 
+-- 3b. Tài khoản Quản trị viên & Sinh viên (Users)
+-- Chèn NGAY SAU sinh viên: miễn giảm, sổ cái, hoàn tiền, nhật ký đều có khóa ngoại tới users,
+-- nên bảng users phải có dữ liệu trước (kể cả khi phpMyAdmin bật kiểm tra khóa ngoại).
+INSERT INTO `users` (`id`, `username`, `password_hash`, `full_name`, `role`, `student_id`, `must_change_password`, `failed_logins`, `locked_until`, `created_at`) VALUES
+(1, 'admin', '$2y$12$WDDv3BxKcciz9/102tWyPew3Qf6xlwna4PqzlcxODAzGGlaNOS5di', 'Quản trị viên Admin', 'admin', NULL, 0, 0, NULL, '2026-08-15 08:00:00'),
+(2, 'staff01', '$2y$12$6Bqyi/l2k1lGDHWX3a0LOeS2.kS58BNx2OYM1zLmZX90jtuXUToU2', 'Cán bộ Staff 01', 'admin', NULL, 0, 0, NULL, '2026-08-15 08:00:00'),
+(3, 'sv001', '$2y$12$fNm91FOriyPX8Vvsawiz/.s/2gzxjmW1UxXCZy04j6X6Syf/rOfHO', 'Nguyễn Văn An', 'student', 1, 0, 0, NULL, '2026-08-20 08:00:00'),
+(4, 'sv002', '$2y$12$qgGMn2VxrgWnnF8hQ0eyH.AflhNZscPpLQdXO9lQxtx6VyOWu7lYO', 'Trần Thị Bình', 'student', 2, 0, 0, NULL, '2026-08-20 08:05:00'),
+(5, 'sv003', '$2y$12$6VLK7jresNIqWi8tcL701OSMOr2Me83v.//YF.9GCXKzoC4.YgeGS', 'Lê Hoàng Cường', 'student', 3, 0, 0, NULL, '2026-08-20 08:10:00'),
+(6, 'sv011', '$2y$12$PYbFLMuHGOY2XkjwLSamYO3WyHHw3UhTfP0x4Kpe7TfBIZgl/Cm3i', 'Ngô Quang Khải', 'student', 11, 0, 0, NULL, '2026-08-20 08:50:00'),
+(7, 'sv006', '$2y$12$.p5yi2xNLlTb9nl9FFo60ejbU2TZgdBsC2njfTbOloVBeUHYljrEG', 'Võ Minh Đức', 'student', 6, 1, 0, NULL, '2026-08-20 08:25:00'),
+(8, 'sv014', '$2y$12$CUi5ihZqWEF/FlnAk4WH4.IWeMpdq7dXjqsFE6JmKDbRPBs/tAeIS', 'Nguyễn Hoàng Long', 'student', 14, 0, 0, NULL, '2026-11-05 08:00:00'),
+(9, 'sv015', '$2y$12$uM5ltAqJCk1YhuqcvZy22eOYjw1UAILTRzILh222dI5tr5T8dlNP.', 'Nguyễn Hoàng Long', 'student', 15, 0, 0, NULL, '2026-11-05 08:05:00'),
+(10, 'sv018', '$2y$12$wMczMY/rn2uO5xaRqTvD..lZlYW6nSfaoqiZHJYulhmVM4GpUdkgy', 'Đặng Quốc Tuấn', 'student', 18, 0, 0, NULL, '2026-11-05 08:20:00'),
+(11, 'sv020', '$2y$12$YBlrXxLIcmodvICprGcoW.WsOBaThJZ4SBydHhpWHOiap2USZ87Ea', 'Trần Văn Hưng', 'student', 20, 0, 0, NULL, '2026-11-05 08:30:00'),
+(12, 'sv023', '$2y$12$6WdIi1sLxfrM7SBgUtlDVOZrwIWAUz4WACeVDceyfxP1atQv0vBrS', 'Đỗ Mai Trang', 'student', 23, 1, 0, NULL, '2026-11-05 08:45:00'),
+(13, 'sv024', '$2y$12$TvdWGyxXukMzMK2J.zoZRed4hXJmeW2WEt0YcO9eTh7oK8kwLP9he', 'Bùi Đức Mạnh', 'student', 24, 0, 5, '2030-01-01 00:00:00', '2026-11-05 08:50:00');
+
 -- 4. Hồ sơ Học phí (Fee Records)
 -- ID 1: SV001 HK1 2026-2027: 15 TC x 850.000 = 12.750.000
 -- ID 2: SV002 HK1 2026-2027: 18 TC x 850.000 = 15.300.000
@@ -187,18 +205,18 @@ INSERT INTO `ledger_entries` (`id`, `fee_record_id`, `entry_type`, `amount`, `me
 (12, 13, 'payment', 3000000, 'Chuyển khoản', '2026-09-02', 'PT-20260902-0001', NULL, NULL, NULL, 'Thu đợt 1 SV012', 'a1111111-1111-1111-1111-111111111112', 1, '2026-09-02 09:00:00'),
 (13, 13, 'payment', 1500000, 'Tiền mặt', '2026-09-25', 'PT-20260925-0001', NULL, NULL, NULL, 'Thu đợt 2 SV012', 'a1111111-1111-1111-1111-111111111113', 1, '2026-09-25 10:00:00'),
 (14, 14, 'payment', 3000000, 'Tiền mặt', '2026-11-15', 'PT-20261115-0001', NULL, NULL, NULL, 'Nộp đợt 1 tiền mặt', 'a1111111-1111-1111-1111-111111111114', 1, '2026-11-15 09:00:00'),
-(15, 14, 'payment', 4000000, 'Mã QR', '2026-12-05', 'PT-20261205-0001', NULL, NULL, NULL, 'Thanh toán đợt 2 qua QR', 'a1111111-1111-1111-1111-111111111115', NULL, '2026-12-05 10:00:00'),
-(16, 14, 'payment', 3500000, 'Thẻ Visa/Mastercard', '2027-01-10', 'PT-20270110-0001', NULL, NULL, NULL, 'Thanh toán đợt 3 qua thẻ', 'a1111111-1111-1111-1111-111111111116', NULL, '2027-01-10 14:15:00'),
+(15, 14, 'payment', 4000000, 'Mã QR', '2026-12-05', 'PT-20261205-0001', NULL, NULL, NULL, 'Thanh toán đợt 2 qua QR', 'a1111111-1111-1111-1111-111111111115', 10, '2026-12-05 10:00:00'),
+(16, 14, 'payment', 3500000, 'Thẻ Visa/Mastercard', '2027-01-10', 'PT-20270110-0001', NULL, NULL, NULL, 'Thanh toán đợt 3 qua thẻ', 'a1111111-1111-1111-1111-111111111116', 10, '2027-01-10 14:15:00'),
 (17, 14, 'payment', 3000000, 'Chuyển khoản', '2027-01-25', 'PT-20270125-0001', NULL, NULL, NULL, 'Nộp đợt 4 chuyển khoản hoàn tất', 'a1111111-1111-1111-1111-111111111117', 1, '2027-01-25 11:00:00'),
-(18, 16, 'payment', 4000000, 'Mã QR', '2026-12-15', 'PT-20261215-0001', NULL, NULL, NULL, 'Thanh toán học phí còn lại sau miễn giảm qua QR', 'a1111111-1111-1111-1111-111111111118', NULL, '2026-12-15 09:30:00'),
+(18, 16, 'payment', 4000000, 'Mã QR', '2026-12-15', 'PT-20261215-0001', NULL, NULL, NULL, 'Thanh toán học phí còn lại sau miễn giảm qua QR', 'a1111111-1111-1111-1111-111111111118', 11, '2026-12-15 09:30:00'),
 (19, 17, 'payment', 12600000, 'Tiền mặt', '2027-02-20', 'PT-20270220-0001', NULL, NULL, NULL, 'Nộp học phí muộn sau hạn đóng đăng ký', 'a1111111-1111-1111-1111-111111111119', 1, '2027-02-20 10:00:00'),
 (20, 18, 'payment', 5000000, 'Tiền mặt', '2026-11-25', 'PT-20261125-0001', NULL, NULL, NULL, 'Thu đợt 1', 'a1111111-1111-1111-1111-111111111120', 1, '2026-11-25 09:00:00'),
 (21, 18, 'payment', 2000000, 'Tiền mặt', '2026-11-25', 'PT-20261125-0002', NULL, NULL, NULL, 'Thu nhầm sinh viên', 'a1111111-1111-1111-1111-111111111121', 1, '2026-11-25 09:15:00'),
 (22, 18, 'reversal', 2000000, 'Tiền mặt', '2026-11-25', NULL, 21, NULL, 'Nhập nhầm sinh viên', 'Đảo mục phiếu thu nhầm PT-20261125-0002', 'a1111111-1111-1111-1111-111111111122', 1, '2026-11-25 09:30:00'),
-(23, 19, 'payment', 9000000, 'Thẻ Visa/Mastercard', '2027-01-15', 'PT-20270115-0001', NULL, NULL, NULL, 'Thanh toán học phí qua thẻ', 'a1111111-1111-1111-1111-111111111123', NULL, '2027-01-15 08:30:00'),
-(24, 20, 'payment', 9000000, 'Mã QR', '2027-01-15', 'PT-20270115-0002', NULL, NULL, NULL, 'Thanh toán học phí qua QR', 'a1111111-1111-1111-1111-111111111124', NULL, '2027-01-15 11:00:00'),
-(25, 21, 'payment', 9000000, 'Mã QR', '2027-01-20', 'PT-20270120-0001', NULL, NULL, NULL, 'Thanh toán học phí qua QR', 'a1111111-1111-1111-1111-111111111125', NULL, '2027-01-20 09:15:00'),
-(26, 22, 'payment', 9000000, 'Mã QR', '2027-01-22', 'PT-20270122-0001', NULL, NULL, NULL, 'Thanh toán học phí qua QR', 'a1111111-1111-1111-1111-111111111126', NULL, '2027-01-22 15:30:00');
+(23, 19, 'payment', 9000000, 'Thẻ Visa/Mastercard', '2027-01-15', 'PT-20270115-0001', NULL, NULL, NULL, 'Thanh toán học phí qua thẻ', 'a1111111-1111-1111-1111-111111111123', 8, '2027-01-15 08:30:00'),
+(24, 20, 'payment', 9000000, 'Mã QR', '2027-01-15', 'PT-20270115-0002', NULL, NULL, NULL, 'Thanh toán học phí qua QR', 'a1111111-1111-1111-1111-111111111124', 9, '2027-01-15 11:00:00'),
+(25, 21, 'payment', 9000000, 'Mã QR', '2027-01-20', 'PT-20270120-0001', NULL, NULL, NULL, 'Thanh toán học phí qua QR', 'a1111111-1111-1111-1111-111111111125', 1, '2027-01-20 09:15:00'),
+(26, 22, 'payment', 9000000, 'Mã QR', '2027-01-22', 'PT-20270122-0001', NULL, NULL, NULL, 'Thanh toán học phí qua QR', 'a1111111-1111-1111-1111-111111111126', 1, '2027-01-22 15:30:00');
 
 -- 7. Yêu cầu Hoàn trả (Refund Requests)
 -- Pending refund for record 5 (SV001 HK2): 1.000.000
@@ -260,21 +278,5 @@ INSERT INTO `bills` (`id`, `ledger_entry_id`, `bill_no`, `snapshot`, `created_at
 -- 9. Nhật ký Kiểm toán ban đầu (Audit Log)
 INSERT INTO `audit_log` (`user_id`, `action`, `entity`, `entity_id`, `payload`, `ip`, `created_at`) VALUES
 (1, 'seed_init', 'system', '0', '{"info": "Khởi tạo dữ liệu mẫu hệ thống"}', '127.0.0.1', '2026-08-01 08:00:00');
-
--- 10. Tài khoản Quản trị viên & Sinh viên (Users)
-INSERT INTO `users` (`id`, `username`, `password_hash`, `full_name`, `role`, `student_id`, `must_change_password`, `failed_logins`, `locked_until`, `created_at`) VALUES
-(1, 'admin', '$2y$12$WDDv3BxKcciz9/102tWyPew3Qf6xlwna4PqzlcxODAzGGlaNOS5di', 'Quản trị viên Admin', 'admin', NULL, 0, 0, NULL, '2026-08-15 08:00:00'),
-(2, 'staff01', '$2y$12$6Bqyi/l2k1lGDHWX3a0LOeS2.kS58BNx2OYM1zLmZX90jtuXUToU2', 'Cán bộ Staff 01', 'admin', NULL, 0, 0, NULL, '2026-08-15 08:00:00'),
-(3, 'sv001', '$2y$12$fNm91FOriyPX8Vvsawiz/.s/2gzxjmW1UxXCZy04j6X6Syf/rOfHO', 'Nguyễn Văn An', 'student', 1, 0, 0, NULL, '2026-08-20 08:00:00'),
-(4, 'sv002', '$2y$12$qgGMn2VxrgWnnF8hQ0eyH.AflhNZscPpLQdXO9lQxtx6VyOWu7lYO', 'Trần Thị Bình', 'student', 2, 0, 0, NULL, '2026-08-20 08:05:00'),
-(5, 'sv003', '$2y$12$6VLK7jresNIqWi8tcL701OSMOr2Me83v.//YF.9GCXKzoC4.YgeGS', 'Lê Hoàng Cường', 'student', 3, 0, 0, NULL, '2026-08-20 08:10:00'),
-(6, 'sv011', '$2y$12$PYbFLMuHGOY2XkjwLSamYO3WyHHw3UhTfP0x4Kpe7TfBIZgl/Cm3i', 'Ngô Quang Khải', 'student', 11, 0, 0, NULL, '2026-08-20 08:50:00'),
-(7, 'sv006', '$2y$12$.p5yi2xNLlTb9nl9FFo60ejbU2TZgdBsC2njfTbOloVBeUHYljrEG', 'Võ Minh Đức', 'student', 6, 1, 0, NULL, '2026-08-20 08:25:00'),
-(8, 'sv014', '$2y$12$CUi5ihZqWEF/FlnAk4WH4.IWeMpdq7dXjqsFE6JmKDbRPBs/tAeIS', 'Nguyễn Hoàng Long', 'student', 14, 0, 0, NULL, '2026-11-05 08:00:00'),
-(9, 'sv015', '$2y$12$uM5ltAqJCk1YhuqcvZy22eOYjw1UAILTRzILh222dI5tr5T8dlNP.', 'Nguyễn Hoàng Long', 'student', 15, 0, 0, NULL, '2026-11-05 08:05:00'),
-(10, 'sv018', '$2y$12$wMczMY/rn2uO5xaRqTvD..lZlYW6nSfaoqiZHJYulhmVM4GpUdkgy', 'Đặng Quốc Tuấn', 'student', 18, 0, 0, NULL, '2026-11-05 08:20:00'),
-(11, 'sv020', '$2y$12$YBlrXxLIcmodvICprGcoW.WsOBaThJZ4SBydHhpWHOiap2USZ87Ea', 'Trần Văn Hưng', 'student', 20, 0, 0, NULL, '2026-11-05 08:30:00'),
-(12, 'sv023', '$2y$12$6WdIi1sLxfrM7SBgUtlDVOZrwIWAUz4WACeVDceyfxP1atQv0vBrS', 'Đỗ Mai Trang', 'student', 23, 1, 0, NULL, '2026-11-05 08:45:00'),
-(13, 'sv024', '$2y$12$TvdWGyxXukMzMK2J.zoZRed4hXJmeW2WEt0YcO9eTh7oK8kwLP9he', 'Bùi Đức Mạnh', 'student', 24, 0, 5, '2030-01-01 00:00:00', '2026-11-05 08:50:00');
 
 SET FOREIGN_KEY_CHECKS = 1;

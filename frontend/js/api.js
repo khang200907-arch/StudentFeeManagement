@@ -123,7 +123,11 @@
         const error = new Error(data?.error?.message || `Yêu cầu thất bại (HTTP ${res.status}).`);
         error.status = res.status;
         error.code = data?.error?.code || 'HTTP_ERROR';
-        error.fields = data?.error?.fields || {};
+        // Server luôn gửi "fields": {} kể cả khi lỗi không gắn với ô nhập nào.
+        // Object rỗng vẫn là truthy trong JS → các chỗ viết `if (err.fields) … else showToast()`
+        // sẽ không bao giờ hiện thông báo. Vì vậy chỉ gán khi thật sự có lỗi theo trường.
+        const serverFields = data?.error?.fields;
+        error.fields = (serverFields && Object.keys(serverFields).length > 0) ? serverFields : null;
         error.data = data;
         throw error;
       }

@@ -1841,7 +1841,9 @@
           </td>
           <td class="text-center table-actions-cell">
             <button type="button" class="btn btn-sm btn-outline-info btn-exempt-fee" data-id="${r.fee_record_id}">🎁 Miễn giảm</button>
-            <button type="button" class="btn btn-sm btn-outline-success btn-pay-fee" data-id="${r.fee_record_id}">💳 Thu tiền</button>
+            ${isPayableFee(r)
+              ? `<button type="button" class="btn btn-sm btn-outline-success btn-pay-fee" data-id="${r.fee_record_id}">💳 Thu tiền</button>`
+              : `<button type="button" class="btn btn-sm btn-outline-secondary" disabled title="${r.is_overpaid ? 'Hồ sơ đang nộp thừa' : 'Hồ sơ đã thanh toán đủ'}">💳 Thu tiền</button>`}
             ${excessActionHtml}
           </td>
         </tr>
@@ -2427,27 +2429,61 @@
      9. PHÂN HỆ 5: THU HỌC PHÍ & HOÀN TIỀN (PAYMENTS & REFUNDS)
      ========================================================================== */
 
+  /** Hồ sơ còn nhận thu tiền được: còn nợ và không nộp thừa (server cũng từ chối các trường hợp khác). */
+  function isPayableFee(f) {
+    return Number(f.outstanding) > 0 && !f.is_overpaid;
+  }
+
+  /** Rút gọn chuỗi quá dài để ô chọn không tràn màn hình (bản đầy đủ đặt ở thuộc tính title). */
+  function shortenText(text, maxLen) {
+    const s = String(text ?? '');
+    return s.length > maxLen ? s.slice(0, maxLen - 1) + '…' : s;
+  }
+
+  /** Đổ danh sách hồ sơ CÒN NỢ vào ô chọn của modal "Lập Phiếu Thu". */
   function populatePaymentFeeSelect() {
     const sel = document.getElementById('payment-fee-select');
     if (!sel) return;
     const cur = sel.value;
-    sel.innerHTML = '<option value="">-- Chọn sinh viên và học kỳ cần nộp --</option>' + 
-      AppState.feeRecords.map(f => {
-        const debt = f.outstanding > 0 ? `(Nợ: ${Calc.formatVND(f.outstanding)})` : `(${f.status_label})`;
-        return `<option value="${f.fee_record_id}">${escapeHTML(f.student_code)} - ${escapeHTML(f.full_name)} [${escapeHTML(f.semester_label)}] ${debt}</option>`;
+    const payable = AppState.payableFeeRecords || [];
+    const placeholder = payable.length > 0
+      ? '-- Chọn sinh viên và học kỳ cần nộp --'
+      : '-- Không có hồ sơ nào còn nợ --';
+    sel.innerHTML = `<option value="">${placeholder}</option>` +
+      payable.map(f => {
+        const fullLabel = `${f.student_code} - ${f.full_name} [${f.semester_label}] (Nợ: ${Calc.formatVND(f.outstanding)})`;
+        const shortLabel = `${f.student_code} - ${shortenText(f.full_name, 40)} [${f.semester_label}] (Nợ: ${Calc.formatVND(f.outstanding)})`;
+        return `<option value="${escapeHTML(f.fee_record_id)}" title="${escapeHTML(fullLabel)}">${escapeHTML(shortLabel)}</option>`;
       }).join('');
-    if (cur) sel.value = cur;
+    if (cur && payable.some(f => String(f.fee_record_id) === String(cur))) sel.value = cur;
   }
 
-  function openPaymentModalWithFee(feeRecordId = null) {
+  /**
+   * Mở modal "Lập Phiếu Thu Học Phí". Luôn tải danh sách hồ sơ mới nhất từ server
+   * (không phụ thuộc việc đã mở tab Hồ sơ học phí hay bộ lọc của bảng), chỉ giữ hồ sơ còn nợ.
+   */
+  async function openPaymentModalWithFee(feeRecordId = null) {
     const modal = document.getElementById('modal-payment');
     const form = document.getElementById('payment-form');
     Api.clearFieldErrors(form);
     form.reset();
-
     form.paymentDate.value = Calc.getTodayISO();
 
+    try {
+      const res = await Api.get('/fee-records');
+      AppState.payableFeeRecords = (res.data || []).filter(isPayableFee);
+    } catch (err) {
+      showToast('Không tải được danh sách hồ sơ học phí: ' + err.message, 'error');
+      return;
+    }
+    populatePaymentFeeSelect();
+
     if (feeRecordId) {
+      const isPayable = AppState.payableFeeRecords.some(f => String(f.fee_record_id) === String(feeRecordId));
+      if (!isPayable) {
+        showToast('Hồ sơ này đã thanh toán đủ hoặc đang nộp thừa, không thể thu thêm tiền.', 'warning');
+        return;
+      }
       form.feeRecordId.value = feeRecordId;
     }
     updatePaymentFeeDetails();
@@ -2461,7 +2497,7 @@
     const fullText = document.getElementById('pay-full-text');
 
     const feeId = select.value;
-    const fee = AppState.feeRecords.find(f => String(f.fee_record_id) === String(feeId));
+    const fee = (AppState.payableFeeRecords || []).find(f => String(f.fee_record_id) === String(feeId));
     AppState.selectedFeeForPayment = fee;
 
     if (!fee) {
@@ -2535,22 +2571,25 @@
       request_id: Api.generateUUID()
     };
 
+    let res;
     try {
-      const res = await Api.post(`/fee-records/${feeId}/payments`, body, btn);
-      showToast('Ghi nhận phiếu thu học phí thành công.');
-      document.getElementById('modal-payment').close();
-      await refreshFeeRecord(feeId);
-      await loadFeesData();
-      await loadPaymentsData();
-      await loadReportsData();
-
-      if (res && res.data && res.data.id) {
-        openReceiptView(res.data.id);
-      }
+      res = await Api.post(`/fee-records/${feeId}/payments`, body, btn);
     } catch (err) {
-      if (err.fields) Api.renderFieldErrors(form, err.fields);
-      else showToast(err.message, 'error');
+      // Lỗi theo trường → hiện dưới ô tương ứng; lỗi nghiệp vụ (vd vượt số nợ, hồ sơ nộp thừa)
+      // → hiện ngay dưới ô Số tiền để người dùng chắc chắn thấy, kèm toast.
+      Api.renderFieldErrors(form, err.fields || { amount: err.message });
+      if (!err.fields) showToast(err.message, 'error');
+      return;
     }
+
+    showToast('Ghi nhận phiếu thu học phí thành công.');
+    document.getElementById('modal-payment').close();
+
+    // Hiện phiếu thu NGAY, không chờ tải lại các bảng (lỗi tải lại không được chặn phiếu thu)
+    if (res && res.data && res.data.id) {
+      openReceiptView(res.data.id);
+    }
+    Promise.allSettled([refreshFeeRecord(feeId), loadFeesData(), loadPaymentsData(), loadReportsData()]);
   }
 
   /* Hoàn tiền (Refunds) */
