@@ -1375,10 +1375,24 @@
       <form id="payment-form" novalidate>
         <div class="form-error-summary" role="alert" hidden></div>
         <div class="form-group">
-          <label for="payment-fee-select">Chọn hồ sơ học phí <span class="required">*</span></label>
-          <select id="payment-fee-select" name="feeRecordId" required aria-describedby="payment-fee-error">
-            <option value="">-- Chọn sinh viên và học kỳ cần nộp --</option>
-          </select>
+          <label for="payment-fee-search-input">Chọn hồ sơ học phí <span class="required">*</span></label>
+          <!-- Gõ mã SV, họ tên (có dấu hoặc không) hoặc học kỳ để lọc; chỉ liệt kê hồ sơ còn nợ -->
+          <div style="position: relative;">
+            <input
+              type="text"
+              id="payment-fee-search-input"
+              class="form-control"
+              placeholder="Gõ mã SV, họ tên hoặc học kỳ (VD: SV002, binh, HK1 2026)..."
+              autocomplete="off"
+              role="combobox"
+              aria-expanded="false"
+              aria-autocomplete="list"
+              aria-controls="payment-fee-listbox"
+              aria-describedby="payment-fee-error"
+            >
+            <input type="hidden" id="payment-fee-id" name="feeRecordId">
+            <ul id="payment-fee-listbox" role="listbox" class="search-dropdown-list" style="display: none; position: absolute; z-index: 1050; left: 0; right: 0; max-height: 260px; overflow-y: auto; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin: 2px 0 0 0; padding: 0; list-style: none;"></ul>
+          </div>
           <span id="payment-fee-error" class="error-msg" aria-live="polite"></span>
         </div>
 
@@ -1997,8 +2011,8 @@
        Không dùng <script> inline để CSP có thể chặn mọi script lạ (chống XSS). -->
   <script src="frontend/js/qrcode.js?v=20261114_01"></script> <!-- vẽ mã QR -->
   <script src="frontend/js/calc.js?v=20261111_02"></script>   <!-- window.TuitionCalculations: công thức học phí -->
-  <script src="frontend/js/api.js?v=20261115_01"></script>    <!-- gọi API, CSRF token, request_id -->
-  <script src="frontend/js/main.js?v=20261115_01"></script>   <!-- toàn bộ giao diện -->
+  <script src="frontend/js/api.js?v=20261115_03"></script>    <!-- gọi API, CSRF token, request_id -->
+  <script src="frontend/js/main.js?v=20261115_03"></script>   <!-- toàn bộ giao diện -->
   <script src="tests/tests.js?v=20261111_02"></script>        <!-- chỉ chạy khi URL có ?test=1 -->
 </body>
 </html>

@@ -195,8 +195,8 @@
     'value': ['#exemption-value-input', '[name="exemptionValue"]', '[name="value"]'],
     'exemptionValue': ['#exemption-value-input', '[name="exemptionValue"]'],
     'reason': ['#exemption-reason-input', '#refund-reason-input', '#cancel-refund-reason', '#reversal-reason-input', '#res-refund-reason', '#res-transfer-reason', '[name="reason"]', '[name="refundReason"]', '[name="reversalReason"]', '[name="cancel_reason"]', '[name="transferReason"]'],
-    'fee_record_id': ['#payment-fee-select', '[name="feeRecordId"]', '[name="fee_record_id"]'],
-    'feeRecordId': ['#payment-fee-select', '[name="feeRecordId"]'],
+    'fee_record_id': ['#payment-fee-search-input', '[name="feeRecordId"]', '[name="fee_record_id"]'],
+    'feeRecordId': ['#payment-fee-search-input', '[name="feeRecordId"]'],
     'amount': ['#payment-amount-input', '#refund-amount-input', '#res-refund-amount', '#res-transfer-amount', '#rate-price-input', '[name="amount"]', '[name="refundAmount"]', '[name="transferAmount"]', '[name="pricePerCredit"]'],
     'payment_date': ['#payment-date-input', '[name="paymentDate"]', '[name="payment_date"]'],
     'paymentDate': ['#payment-date-input', '[name="paymentDate"]'],
@@ -227,16 +227,17 @@
 
   function findInputElement(formEl, fieldName) {
     const scope = formEl || document;
-    let input = scope.querySelector(`[name="${fieldName}"], #${fieldName}`);
-    if (input) return input;
+    const byName = scope.querySelector(`[name="${fieldName}"], #${fieldName}`);
+    // Ô ẩn (vd giá trị đã chọn của combobox) không hiện được lỗi → ưu tiên ô hiển thị trong FIELD_SELECTORS
+    if (byName && byName.type !== 'hidden') return byName;
     const mapped = FIELD_SELECTORS[fieldName];
     if (mapped) {
       for (const sel of mapped) {
-        input = scope.querySelector(sel);
-        if (input) return input;
+        const input = scope.querySelector(sel);
+        if (input && input.type !== 'hidden') return input;
       }
     }
-    return null;
+    return byName;
   }
 
   function findErrorSpan(formEl, inputEl, fieldName) {

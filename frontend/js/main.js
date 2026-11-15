@@ -1748,7 +1748,6 @@
       if (res.ok) {
         AppState.feeRecords = res.data || [];
         renderFeesTable(AppState.feeRecords);
-        populatePaymentFeeSelect();
         if (semSelect) Api.clearFieldError(null, semSelect, 'semester');
         if (statusSelect) Api.clearFieldError(null, statusSelect, 'status');
       }
@@ -1778,7 +1777,6 @@
           AppState.feeRecords[idx] = { ...AppState.feeRecords[idx], ...updated };
         }
         renderFeesTable(AppState.feeRecords);
-        populatePaymentFeeSelect();
         return updated;
       }
     } catch (e) {
@@ -1981,16 +1979,27 @@
      COMBOBOX SEARCH (ISSUE 2): TÌM KIẾM SINH VIÊN & HỌC KỲ KHI TẠO HỒ SƠ
      ========================================================================== */
 
+  /**
+   * Ô nhập "gõ để tìm" (combobox) có điều hướng bàn phím ↑ ↓ Enter Esc.
+   * Hai chế độ:
+   *  - searchEndpoint: gọi API tìm kiếm (debounce 300 ms) – dùng cho sinh viên / học kỳ.
+   *  - localSearch(q): lọc trên danh sách đã có trong trình duyệt, trả về mảng kết quả;
+   *    ô trống thì hiện toàn bộ – dùng cho danh sách hồ sơ còn nợ trong modal thu tiền.
+   * Mỗi kết quả phải có thuộc tính `id` (được ghi vào hiddenEl khi chọn).
+   */
   function initCombobox({
     inputEl,
     hiddenEl,
     listboxEl,
     errorEl,
     searchEndpoint,
+    localSearch = null,
     emptyMessage,
     formatItem,
     formatValue,
-    onSelect
+    formatTitle = null,
+    onSelect,
+    onClear = null
   }) {
     if (!inputEl || !hiddenEl || !listboxEl) return;
 
@@ -2067,6 +2076,7 @@
         li.style.borderBottom = '1px solid #f1f5f9';
         // Render textContent an toàn tuyệt đối
         li.textContent = formatItem(item);
+        if (formatTitle) li.title = formatTitle(item);
 
         li.addEventListener('mouseenter', () => {
           highlightOption(index);
@@ -2100,6 +2110,16 @@
 
     async function executeSearch(query) {
       const q = (query || '').trim();
+      if (localSearch) {
+        // Lọc ngay trên dữ liệu có sẵn, không gọi server
+        const results = localSearch(q);
+        if (results.length === 0 && q === '') {
+          renderEmptyPrompt();
+        } else {
+          renderResults(results);
+        }
+        return;
+      }
       if (q === '') {
         renderEmptyPrompt();
         return;
@@ -2130,21 +2150,33 @@
 
     // Input typing listener with 300ms debounce
     inputEl.addEventListener('input', () => {
+      const hadSelection = hiddenEl.value !== '';
       hiddenEl.value = '';
       if (errorEl) errorEl.textContent = '';
+      if (hadSelection && onClear) onClear();
 
       if (debounceTimer) clearTimeout(debounceTimer);
+      // Lọc tại chỗ thì phản hồi ngay; gọi API thì chờ người dùng gõ xong (300 ms)
       debounceTimer = setTimeout(() => {
         executeSearch(inputEl.value);
-      }, 300);
+      }, localSearch ? 0 : 300);
     });
 
-    inputEl.addEventListener('focus', () => {
-      if (inputEl.value.trim() !== '') {
+    function openFromInput() {
+      if (localSearch) {
+        // Đang hiện đúng mục đã chọn → mở danh sách đầy đủ để chọn lại dễ dàng
+        executeSearch(hiddenEl.value ? '' : inputEl.value);
+      } else if (inputEl.value.trim() !== '') {
         executeSearch(inputEl.value);
       } else {
         renderEmptyPrompt();
       }
+    }
+
+    inputEl.addEventListener('focus', openFromInput);
+    // Ô đã có con trỏ sẵn (vd vừa mở modal) thì bấm chuột không sinh sự kiện focus → mở bằng click
+    inputEl.addEventListener('click', () => {
+      if (listboxEl.style.display === 'none') openFromInput();
     });
 
     inputEl.addEventListener('blur', () => {
@@ -2440,22 +2472,58 @@
     return s.length > maxLen ? s.slice(0, maxLen - 1) + '…' : s;
   }
 
-  /** Đổ danh sách hồ sơ CÒN NỢ vào ô chọn của modal "Lập Phiếu Thu". */
-  function populatePaymentFeeSelect() {
-    const sel = document.getElementById('payment-fee-select');
-    if (!sel) return;
-    const cur = sel.value;
-    const payable = AppState.payableFeeRecords || [];
-    const placeholder = payable.length > 0
-      ? '-- Chọn sinh viên và học kỳ cần nộp --'
-      : '-- Không có hồ sơ nào còn nợ --';
-    sel.innerHTML = `<option value="">${placeholder}</option>` +
-      payable.map(f => {
-        const fullLabel = `${f.student_code} - ${f.full_name} [${f.semester_label}] (Nợ: ${Calc.formatVND(f.outstanding)})`;
-        const shortLabel = `${f.student_code} - ${shortenText(f.full_name, 40)} [${f.semester_label}] (Nợ: ${Calc.formatVND(f.outstanding)})`;
-        return `<option value="${escapeHTML(f.fee_record_id)}" title="${escapeHTML(fullLabel)}">${escapeHTML(shortLabel)}</option>`;
-      }).join('');
-    if (cur && payable.some(f => String(f.fee_record_id) === String(cur))) sel.value = cur;
+  /** Nhãn 1 hồ sơ trong ô chọn của modal thu tiền; `short` = rút gọn họ tên dài. */
+  function paymentFeeLabel(f, short = true) {
+    const name = short ? shortenText(f.full_name, 40) : f.full_name;
+    return `${f.student_code} - ${name} [${f.semester_label}] (Nợ: ${Calc.formatVND(f.outstanding)})`;
+  }
+
+  /**
+   * Lọc danh sách hồ sơ còn nợ theo từ khóa: khớp mã SV, họ tên (có dấu hoặc không dấu)
+   * hoặc học kỳ. Gõ nhiều từ thì phải khớp TẤT CẢ (vd "binh hk1" hay "SV002 2026").
+   * Học kỳ còn khớp dạng viết tắt "HK1 2026-2027".
+   */
+  function filterPayableFees(query) {
+    const all = AppState.payableFeeRecords || [];
+    const words = Calc.normalizeVietnamese(query || '').split(/\s+/).filter(Boolean);
+    const matched = words.length === 0 ? all : all.filter(f => {
+      const haystack = Calc.normalizeVietnamese(
+        `${f.student_code} ${f.full_name} ${f.semester_label} hk${f.term_no} ${f.academic_year_start}`
+      );
+      return words.every(w => haystack.includes(w));
+    });
+    return matched.map(f => ({ ...f, id: f.fee_record_id }));
+  }
+
+  /** Gắn combobox "gõ để tìm" cho ô chọn hồ sơ (gọi 1 lần khi khởi động). */
+  function setupPaymentFeeCombobox() {
+    initCombobox({
+      inputEl: document.getElementById('payment-fee-search-input'),
+      hiddenEl: document.getElementById('payment-fee-id'),
+      listboxEl: document.getElementById('payment-fee-listbox'),
+      errorEl: document.getElementById('payment-fee-error'),
+      localSearch: filterPayableFees,
+      emptyMessage: 'Không có hồ sơ nào còn nợ.',
+      formatItem: (f) => paymentFeeLabel(f, true),
+      formatTitle: (f) => paymentFeeLabel(f, false),
+      formatValue: (f) => paymentFeeLabel(f, true),
+      onSelect: () => updatePaymentFeeDetails(),
+      onClear: () => updatePaymentFeeDetails()
+    });
+  }
+
+  /** Đặt ô chọn hồ sơ về trạng thái trống, hoặc chọn sẵn 1 hồ sơ (mở từ nút "Thu tiền" trong bảng). */
+  function setPaymentFeeSelection(feeRecordId = null) {
+    const input = document.getElementById('payment-fee-search-input');
+    const hidden = document.getElementById('payment-fee-id');
+    const fee = feeRecordId
+      ? (AppState.payableFeeRecords || []).find(f => String(f.fee_record_id) === String(feeRecordId))
+      : null;
+    hidden.value = fee ? fee.fee_record_id : '';
+    input.value = fee ? paymentFeeLabel(fee, true) : '';
+    input.placeholder = (AppState.payableFeeRecords || []).length > 0
+      ? 'Gõ mã SV, họ tên hoặc học kỳ (VD: SV002, binh, HK1 2026)...'
+      : 'Không có hồ sơ nào còn nợ';
   }
 
   /**
@@ -2476,27 +2544,26 @@
       showToast('Không tải được danh sách hồ sơ học phí: ' + err.message, 'error');
       return;
     }
-    populatePaymentFeeSelect();
-
     if (feeRecordId) {
       const isPayable = AppState.payableFeeRecords.some(f => String(f.fee_record_id) === String(feeRecordId));
       if (!isPayable) {
         showToast('Hồ sơ này đã thanh toán đủ hoặc đang nộp thừa, không thể thu thêm tiền.', 'warning');
         return;
       }
-      form.feeRecordId.value = feeRecordId;
     }
+    setPaymentFeeSelection(feeRecordId);
     updatePaymentFeeDetails();
     modal.showModal();
+    // Chưa chọn sẵn hồ sơ → đặt con trỏ vào ô tìm để gõ ngay
+    if (!feeRecordId) document.getElementById('payment-fee-search-input').focus();
   }
 
   function updatePaymentFeeDetails() {
-    const select = document.getElementById('payment-fee-select');
     const detailBox = document.getElementById('payment-fee-detail-box');
     const fullBtn = document.getElementById('btn-pay-full');
     const fullText = document.getElementById('pay-full-text');
 
-    const feeId = select.value;
+    const feeId = document.getElementById('payment-fee-id').value;
     const fee = (AppState.payableFeeRecords || []).find(f => String(f.fee_record_id) === String(feeId));
     AppState.selectedFeeForPayment = fee;
 
@@ -4830,7 +4897,7 @@
     document.getElementById('btn-close-payment-modal')?.addEventListener('click', () => document.getElementById('modal-payment').close());
     document.getElementById('btn-cancel-payment')?.addEventListener('click', () => document.getElementById('modal-payment').close());
     document.getElementById('payment-form')?.addEventListener('submit', handlePaymentSubmit);
-    document.getElementById('payment-fee-select')?.addEventListener('change', updatePaymentFeeDetails);
+    setupPaymentFeeCombobox(); // ô chọn hồ sơ trong modal thu tiền: gõ để tìm
     document.getElementById('btn-pay-full')?.addEventListener('click', () => {
       const fee = AppState.selectedFeeForPayment;
       if (fee && fee.outstanding > 0) {
@@ -4986,10 +5053,6 @@
     }, 'reason');
 
     // 7. Form Thu học phí
-    bindInlineValidation(document.getElementById('payment-form'), document.getElementById('payment-fee-select'), (val) => {
-      if (!val) return 'Vui lòng chọn hồ sơ học phí.';
-      return null;
-    }, 'fee_record_id');
     bindInlineValidation(document.getElementById('payment-form'), document.getElementById('payment-amount-input'), (val) => {
       const r = parseClientCurrency(val);
       return r.valid ? null : r.error;
