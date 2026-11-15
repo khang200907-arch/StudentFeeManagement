@@ -114,7 +114,7 @@ flowchart LR
 | --- | --- |
 | FR-40 | Đăng ký tín chỉ cho học kỳ đang mở (số tín chỉ trong khoảng cấu hình, mặc định 1–30); xem trước học phí; chỉ được sửa khi chưa nộp tiền |
 | FR-41 | Tra cứu công nợ tất cả học kỳ: tổng nợ, các học kỳ còn nợ, chi tiết từng hồ sơ |
-| FR-42 | Thanh toán bằng **Mã QR**: tạo phiên 15 phút, tự kiểm tra trạng thái mỗi 3 giây, hủy phiên, xác nhận (mô phỏng) |
+| FR-42 | Thanh toán bằng **Mã QR**: tạo phiên 5 phút, tự kiểm tra trạng thái mỗi 3 giây, hủy phiên, xác nhận (mô phỏng) |
 | FR-43 | Thanh toán bằng **thẻ Visa/Mastercard** (mô phỏng): kiểm tra Luhn, hạn thẻ, CVV; không bao giờ lưu số thẻ đầy đủ/CVV |
 | FR-44 | Sau mỗi thanh toán thành công sinh **hóa đơn** `HD-YYYYMMDD-NNNN`; xem, tải (HTML), in |
 | FR-45 | Lịch sử thanh toán và số dư lũy kế từng học kỳ; lọc khoảng ngày (≤ 5 năm, "đến" ≥ "từ") |
@@ -153,7 +153,7 @@ flowchart LR
 | BR-10 | Chuyển tiền: cùng sinh viên, khác hồ sơ, không vượt số thừa khả dụng của nguồn và số nợ của đích |
 | BR-11 | Hoàn tiền không vượt số nộp thừa; **người duyệt ≠ người lập** (maker-checker) |
 | BR-12 | Sinh viên chỉ đăng ký được học kỳ đang mở và chưa quá hạn; không sửa tín chỉ khi đã nộp tiền |
-| BR-13 | Sinh viên không thanh toán bằng "Tiền mặt"; phiên QR hết hạn sau 15 phút |
+| BR-13 | Sinh viên không thanh toán bằng "Tiền mặt"; phiên QR hết hạn sau 5 phút |
 | BR-14 | Hóa đơn là bản chụp bất biến tại thời điểm thanh toán; chỉ lưu thương hiệu + 4 số cuối thẻ |
 
 ## 6. Mô hình ca sử dụng
@@ -202,8 +202,8 @@ flowchart LR
 | --- | --- |
 | Tác nhân | Sinh viên, Cổng thanh toán mô phỏng |
 | Tiền điều kiện | Đã đăng nhập, đã đổi mật khẩu tạm; hồ sơ của chính sinh viên còn nợ; `simulation_enabled = true` |
-| Luồng chính | 1. Chọn hồ sơ, chọn "Mã QR", nhập số tiền. 2. Hệ thống tạo phiên (hết hạn 15 phút) và hiển thị mã QR + đồng hồ đếm ngược. 3. Giao diện kiểm tra trạng thái mỗi 3 giây. 4. Sinh viên bấm "Mô phỏng thanh toán thành công" (thay cho ngân hàng báo có). 5. Hệ thống ghi khoản thu, cấp biên lai và hóa đơn. 6. Hiển thị "Thanh toán thành công" kèm nút xem/tải/in hóa đơn |
-| Luồng thay thế | 2a. Số tiền > còn nợ hoặc hồ sơ nộp thừa → từ chối. 3a. Quá 15 phút → phiên `expired`, yêu cầu tạo mã mới. 3b. Sinh viên bấm "Hủy phiên" → `cancelled`. 4a. Phiên đã xác nhận/hủy → từ chối xác nhận lần 2 |
+| Luồng chính | 1. Chọn hồ sơ, chọn "Mã QR", nhập số tiền. 2. Hệ thống tạo phiên (hết hạn 5 phút) và hiển thị mã QR + đồng hồ đếm ngược. 3. Giao diện kiểm tra trạng thái mỗi 3 giây. 4. Sinh viên bấm "Mô phỏng thanh toán thành công" (thay cho ngân hàng báo có). 5. Hệ thống ghi khoản thu, cấp biên lai và hóa đơn. 6. Hiển thị "Thanh toán thành công" kèm nút xem/tải/in hóa đơn |
+| Luồng thay thế | 2a. Số tiền > còn nợ hoặc hồ sơ nộp thừa → từ chối. 3a. Quá 5 phút → phiên `expired`, yêu cầu tạo mã mới. 3b. Sinh viên bấm "Hủy phiên" → `cancelled`. 4a. Phiên đã xác nhận/hủy → từ chối xác nhận lần 2 |
 | Hậu điều kiện | Phiên `confirmed`, 1 dòng sổ cái `Mã QR`, 1 hóa đơn bất biến |
 
 ### 6.3 Đặc tả UC5/UC6 — Hoàn tiền nộp thừa

@@ -189,7 +189,7 @@ derived_status (SQL, dùng cho bộ lọc và báo cáo – Nộp thừa đượ
 | BR-056 | Sinh viên chỉ đăng ký được học kỳ có `registration_open = 1` và `hôm nay ≤ registration_close` (nếu có). Không sửa tín chỉ khi `total_paid > 0`. |
 | BR-057 | Mỗi sinh viên tối đa **1 tài khoản**: username = mã SV viết thường, mật khẩu tạm 12 ký tự (đủ hoa/thường/số/ký tự đặc biệt), `must_change_password = 1`. |
 | BR-058 | Mật khẩu mới: ≥ 8 ký tự, có chữ và số, khớp ô xác nhận, khác mật khẩu hiện tại. Khi `must_change_password = 1`, mọi API sinh viên khác trả 403 `PASSWORD_CHANGE_REQUIRED`. |
-| BR-059 | Phiên QR hết hạn sau 15 phút. Tạo phiên mới cho cùng hồ sơ thì phiên `pending` cũ bị hủy. Không hủy được phiên đã `confirmed`. Lúc xác nhận, số tiền được kiểm tra lại với số nợ hiện tại. |
+| BR-059 | Phiên QR hết hạn sau 5 phút. Tạo phiên mới cho cùng hồ sơ thì phiên `pending` cũ bị hủy. Không hủy được phiên đã `confirmed`. Lúc xác nhận, số tiền được kiểm tra lại với số nợ hiện tại. |
 | BR-060 | Mọi kênh thanh toán mô phỏng (QR xác nhận, thẻ, endpoint cũ) chỉ hoạt động khi `simulation_enabled = true`. |
 | BR-061 | Tra cứu lịch sử: `to ≥ from` và khoảng ≤ 5 năm. Từ khóa tìm kiếm ≤ 100 ký tự; tìm sinh viên trả tối đa 20 kết quả. |
 
@@ -259,7 +259,7 @@ Viết dạng *Cho … / Khi … / Thì …*. Mỗi tiêu chí được nghiệm
 | AC-40 | Báo cáo (FR-30, FR-31) | Với mọi học kỳ và toàn trường: `collected + outstanding = receivable`; tổng các nhóm trạng thái = tổng hồ sơ; không có giá trị null. |
 | AC-41 | Badge (FR-32) | Có giao dịch mới → badge tăng; mở màn hình Lịch sử → badge về 0. |
 | AC-50 | Đăng ký tín chỉ (FR-40) | SV011 đăng ký 15 TC HK1 2026-2027 → 201, gross 12.750.000. 0 hoặc 31 TC → 400. Học kỳ đã đóng → 422. Đã nộp tiền → sửa tín chỉ bị 422. |
-| AC-51 | Thanh toán QR (FR-42) | Tạo phiên 2.000.000 → `pending`, hết hạn sau 15 phút. Bấm mô phỏng → `confirmed`, có biên lai `PT-…` và hóa đơn `HD-…`, còn nợ giảm đúng 2.000.000. Xác nhận lần 2 → 409. |
+| AC-51 | Thanh toán QR (FR-42) | Tạo phiên 2.000.000 → `pending`, hết hạn sau 5 phút. Bấm mô phỏng → `confirmed`, có biên lai `PT-…` và hóa đơn `HD-…`, còn nợ giảm đúng 2.000.000. Xác nhận lần 2 → 409. |
 | AC-52 | Thanh toán thẻ (FR-43) | Thẻ `4111…1111` → 201; `5555…4444` → 422; `4000…0002` → 502 và không ghi sổ cái. DB không chứa số thẻ đầy đủ. |
 | AC-53 | Hóa đơn (FR-44) | Mỗi thanh toán SV thành công có đúng 1 hóa đơn; tải về là tệp HTML `bill-HD-….html` không chứa `<script>` hay số thẻ đầy đủ. SV khác truy cập → 404. |
 

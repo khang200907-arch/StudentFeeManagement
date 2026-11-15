@@ -322,7 +322,7 @@ Hai mối nối khóa kép **suy ra từ ràng buộc**, không có khóa ngoạ
 | `amount` | BIGINT | NN | |
 | `method` | VARCHAR(50) | NN | Hiện luôn là 'Mã QR' |
 | `request_id` | CHAR(36) | NN, **UK** | |
-| `expires_at` | DATETIME | NN | Tạo + 15 phút |
+| `expires_at` | DATETIME | NN | Tạo + 5 phút |
 | `created_at`, `confirmed_at` | DATETIME | | |
 | | | Chỉ mục `idx_pay_sess_lookup(fee_record_id, status)`, `idx_pay_sess_student(student_id, created_at)` | |
 

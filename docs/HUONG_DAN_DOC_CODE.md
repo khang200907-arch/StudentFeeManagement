@@ -216,7 +216,7 @@ erDiagram
 | `refund_requests` | Yêu cầu hoàn tiền: `pending` → `completed` / `cancelled` |
 | `bills` | Hóa đơn của SV, lưu `snapshot` JSON bất biến |
 | `receipt_counters`, `bill_counters` | Bộ đếm số biên lai `PT-…` / hóa đơn `HD-…` theo ngày |
-| `payment_sessions` | Phiên thanh toán QR (hết hạn sau 15 phút) |
+| `payment_sessions` | Phiên thanh toán QR (hết hạn sau 5 phút) |
 | `audit_log` | Nhật ký: ai làm gì, lúc nào |
 | `user_nav_state` | Admin đã xem giao dịch tới đâu (cho badge "mới") |
 | `student_settings` | Số tín chỉ tối thiểu/tối đa được đăng ký |
@@ -255,7 +255,7 @@ sequenceDiagram
     participant SV as main.js (sinh viên)
     participant API as handlers/student.php
     SV->>API: POST /api/student/fee-records/{id}/payment-sessions (5a)
-    API-->>SV: phiên QR (hết hạn 15 phút)
+    API-->>SV: phiên QR (hết hạn 5 phút)
     loop mỗi 3 giây
         SV->>API: GET /api/student/payment-sessions/{id} (5b)
     end

@@ -4202,7 +4202,12 @@
     return /^\d{3,4}$/.test((cvv || '').trim());
   }
 
-  async function loadStudentPaymentOptions() {
+  /**
+   * Tải lại danh sách khoản còn nợ của sinh viên.
+   * @param {boolean} keepSuccessBox true = giữ ô "Thanh toán thành công" (biên lai, nút hóa đơn)
+   *        đang hiện. Dùng khi vừa thanh toán xong; nếu ẩn đi thì sinh viên không thấy kết quả.
+   */
+  async function loadStudentPaymentOptions({ keepSuccessBox = false } = {}) {
     const select = document.getElementById('student-pay-fee-record');
     const amountInput = document.getElementById('student-pay-amount');
     const hint = document.getElementById('student-pay-max-hint');
@@ -4212,7 +4217,7 @@
     const submitBtn = document.getElementById('btn-student-submit-pay');
 
     closeStudentQrSession();
-    if (successBox) successBox.style.display = 'none';
+    if (successBox && !keepSuccessBox) successBox.style.display = 'none';
     if (form) { 
       form.reset(); 
       Api.clearFieldErrors(form); 
@@ -4458,7 +4463,7 @@
               viewRcptBtn.onclick = () => openReceiptView(res.data.receipt_no);
             }
           }
-          loadStudentPaymentOptions();
+          loadStudentPaymentOptions({ keepSuccessBox: true }); // giữ ô kết quả thanh toán thẻ
         }
       } catch (err) {
         clearCardDom();
@@ -4671,7 +4676,7 @@
         }
       }
     }
-    loadStudentPaymentOptions();
+    loadStudentPaymentOptions({ keepSuccessBox: true }); // giữ ô kết quả thanh toán QR
   }
 
   // 4. Sinh viên: Lịch sử thanh toán
